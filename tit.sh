@@ -34,20 +34,34 @@ done
 case "$(uname -m)" in
 	aarch64|arm64)
 		ARCH="aarch64"
+		IS64=true
 		;;
 	arm|armel|armhf|armhfp|armv7|armv7l|armv7a|armv8l)
 		ARCH="arm"
+		IS64=false
 		;;
 	x86_64|amd64)
 		ARCH="x86_64"
+		IS64=true
 		;;
 	x86|i*86)
 		ARCH="i686"
+		IS64=false
 		;;
 	*)
 		error "Architecture \"$(uname -m)\" not supported."
 		;;
 esac
+
+if [ "$TERMUX_32_BIT" = "true" ] && [ "$IS64" = "true" ]; then
+	TERMUX_ROOTFS_PATH+="32"
+	TERMUX_BOOTSTRAP_PATH+="32"
+	if [ "$ARCH" = "aarch64" ]; then
+		ARCH="arm"
+	else
+		ARCH="i686"
+	fi
+fi
 
 if [ "$(find "$TERMUX_ROOTFS_PATH" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l)" = 0 ]; then
 	if [ -f "$TERMUX_BOOTSTRAP_PATH" ]; then

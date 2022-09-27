@@ -51,6 +51,7 @@ OR
 | `TERMUX_BOOTSTRAP_PATH` | `[$TMPDIR /tmp]/termux-fs` | Path to bootstrap archive | `export TERMUX_BOOTSTRAP_PATH="/sdcard/Download/termux-bootstrap.zip"` |
 | `TERMUX_APP_PATH` | `/data/data/com.termux` | Root directory of sandboxed Termux app | `export TERMUX_APP_PATH="/data/data/com.mytermux"` |
 | `TERMUX_PROOT_ARGS` | `(empty)` | Root directory of sandboxed Termux app | `export TERMUX_PROOT_ARGS"-b \"/sdcard/my dir:/dir\""` |
+| `TERMUX_32_BIT` | `false` | Install 32 bit Termux **only works on 64 bit devices** | `export TEMUX_32_BIT="true"` |
 
 **Warning ⚠️⚠️⚠️: Termux bootstrap may not play well with a custom `TERMUX_APP_PATH`.**
 
