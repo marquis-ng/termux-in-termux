@@ -44,6 +44,11 @@ OR
 
 **Warning ⚠️⚠️⚠️: the latter way has some issues (e.g. arguments with spaces). Use the former way to execute a command in the sandbox.**
 
+### Remove Termux-in-Termux:
+```bash
+rm -rf tit.sh termux-fs # Remove the installation script and the sandbox
+```
+
 ### Environment variables:
 | Variable name | Default | Usage | Example |
 | :-- | :-- | :-- | :-- |
