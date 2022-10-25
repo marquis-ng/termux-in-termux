@@ -2,8 +2,8 @@
 
 # Termux in Termux (by marquis-ng)
 
-TERMUX_ROOTFS_PATH="$(realpath -- "${TERMUX_ROOTFS_PATH:-$HOME/termux-fs}")"
-TERMUX_BOOTSTRAP_PATH="$(realpath -- "${TERMUX_BOOTSTRAP_PATH:-${TMPDIR:-/tmp}/termux-fs.zip}")"
+TERMUX_ROOTFS_PATH="$(realpath -- "$HOME/termux-fs")"
+TERMUX_BOOTSTRAP_PATH="$(realpath -- "${TMPDIR:-/tmp}/termux-fs.zip}")"
 TERMUX_APP_PATH="$(realpath -- "${TERMUX_APP_PATH:-/data/data/com.termux}")"
 TERMUX_FILES_PATH="$TERMUX_APP_PATH/files"
 eval "TERMUX_PROOT_ARGS=(${TERMUX_PROOT_ARGS:-})"
