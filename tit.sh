@@ -3,17 +3,17 @@
 # Termux in Termux (by marquis-ng)
 
 TERMUX_ROOTFS_PATH="$(realpath -- "$HOME/termux-fs")"
-TERMUX_BOOTSTRAP_PATH="$(realpath -- "${TMPDIR:-/tmp}/termux-fs.zip}")"
+TERMUX_BOOTSTRAP_PATH="$(realpath -- "${TMPDIR:-/tmp}/termux-fs.zip")"
 TERMUX_APP_PATH="$(realpath -- "${TERMUX_APP_PATH:-/data/data/com.termux}")"
 TERMUX_FILES_PATH="$TERMUX_APP_PATH/files"
 eval "TERMUX_PROOT_ARGS=(${TERMUX_PROOT_ARGS:-})"
 
 info() {
-	printf "\033[1;36m%s\033[0m\n" "$@"
+	printf "\033[1;36m%b\033[0m\n" "$@"
 }
 
 error() {
-	printf "\033[1;31m%s\033[0m\n" "$@" 1>&2
+	printf "\033[1;31m%b\033[0m\n" "$@" 1>&2
 	exit 1
 }
 
@@ -53,9 +53,20 @@ case "$(uname -m)" in
 		;;
 esac
 
+SOURCE="termux/termux-packages"
+if [ "$TERMUX_PACMAN" = "true" ]; then
+	PREFIX="${TERMUX_ROOTFS_PATH%termux*}"
+        SUFFIX="${TERMUX_ROOTFS_PATH#$PREFIX}"
+        TERMUX_ROOTFS_PATH="$PREFIX${SUFFIX/termux/termux-pacman}"
+	PREFIX="${TERMUX_BOOTSTRAP_PATH%termux*}"
+	SUFFIX="${TERMUX_BOOTSTRAP_PATH#$PREFIX}"
+	TERMUX_BOOTSTRAP_PATH="$PREFIX${SUFFIX/termux/termux-pacman}"
+	SOURCE="termux-pacman/termux-packages"
+fi
+
 if [ "$TERMUX_32_BIT" = "true" ] && [ "$IS64" = "true" ]; then
 	TERMUX_ROOTFS_PATH+="32"
-	TERMUX_BOOTSTRAP_PATH+="32"
+	TERMUX_BOOTSTRAP_PATH="${TERMUX_BOOTSTRAP_PATH%.zip}32.zip"
 	if [ "$ARCH" = "aarch64" ]; then
 		ARCH="arm"
 	else
@@ -72,7 +83,7 @@ if [ "$(find "$TERMUX_ROOTFS_PATH" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l)"
 		fi
 		info "Downloading Termux bootstrap..."
 		mkdir -p "$(dirname "$TERMUX_BOOTSTRAP_PATH")"
-		if wget "https://github.com/termux/termux-packages/releases/latest/download/bootstrap-$ARCH.zip" -q --show-progress -O "$TERMUX_BOOTSTRAP_PATH"; then
+		if wget "https://github.com/$SOURCE/releases/latest/download/bootstrap-$ARCH.zip" -q --show-progress -O "$TERMUX_BOOTSTRAP_PATH"; then
 			info "Termux bootstrap downloaded."
 		else
 			error "Failed to download Termux bootstrap."
@@ -80,7 +91,14 @@ if [ "$(find "$TERMUX_ROOTFS_PATH" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l)"
 	fi
 
 	info "Verifying integrity of bootstrap..."
-	if [ "$(wget -qO- https://github.com/termux/termux-packages/releases/latest/download/bootstraps.sha256sum | awk "\$2 == \"bootstrap-$ARCH.zip\" {printf(\$1)}")" != "$(sha256sum "$TERMUX_BOOTSTRAP_PATH" | awk "{printf(\$1)}")" ]; then
+	EXSHA="$(wget -qO- https://github.com/$SOURCE/releases/latest/download/bootstraps.sha256sum | awk "\$2 == \"bootstrap-$ARCH.zip\" {printf(\$1)}")"
+	RSHA="$(sha256sum "$TERMUX_BOOTSTRAP_PATH" | awk "{printf(\$1)}")"
+	if [ "$EXSHA" == "$RSHA" ]; then
+		info "SHA256 matches."
+	else
+		info "\033[1;31mSHA256 checksums do not match." 1>&2
+		info "\033[1;31mExpected: $EXSHA" 1>&2
+		info "\033[1;31mFound: $RSHA" 1>&2
 		if rm -f "$TERMUX_BOOTSTRAP_PATH"; then
 			info "Removed corrupted/expired bootstrap. Rerunning script..."
 			exec "$(realpath -- "$0")"
