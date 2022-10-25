@@ -52,7 +52,6 @@ rm -rf tit.sh termux-fs # Remove the installation script and the sandbox
 ### Environment variables:
 | Variable name | Default | Usage | Example |
 | :-- | :-- | :-- | :-- |
-| `TERMUX_APP_PATH` | `/data/data/com.termux` | Root directory of sandboxed Termux app | `export TERMUX_APP_PATH="/data/data/com.mytermux"` |
 | `TERMUX_PROOT_ARGS` | `(empty)` | Root directory of sandboxed Termux app | `export TERMUX_PROOT_ARGS"-b \"/sdcard/my dir:/dir\""` |
 | `TERMUX_32_BIT` | `false` | Install 32 bit Termux **(only works on 64 bit devices)** | `export TERMUX_32_BIT="true"` |
 | `TERMUX_PACMAN` | `false` | Install Termux with Pacman | `export TERMUX_PACMAN=true` |
