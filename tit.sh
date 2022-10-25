@@ -56,10 +56,10 @@ esac
 SOURCE="termux/termux-packages"
 if [ "$TERMUX_PACMAN" = "true" ]; then
 	PREFIX="${TERMUX_ROOTFS_PATH%termux*}"
-        SUFFIX="${TERMUX_ROOTFS_PATH#$PREFIX}"
+        SUFFIX="${TERMUX_ROOTFS_PATH#"$PREFIX"}"
         TERMUX_ROOTFS_PATH="$PREFIX${SUFFIX/termux/termux-pacman}"
 	PREFIX="${TERMUX_BOOTSTRAP_PATH%termux*}"
-	SUFFIX="${TERMUX_BOOTSTRAP_PATH#$PREFIX}"
+	SUFFIX="${TERMUX_BOOTSTRAP_PATH#"$PREFIX"}"
 	TERMUX_BOOTSTRAP_PATH="$PREFIX${SUFFIX/termux/termux-pacman}"
 	SOURCE="termux-pacman/termux-packages"
 fi
