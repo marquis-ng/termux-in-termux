@@ -14,50 +14,35 @@ It is extremely useful. Trust me. Anyway, here are some applications:
 Installing Termux-in-Termux is as easy as a piece of cake:
 ```bash
 pkg install wget unzip proot # install dependencies for Termux-in-Termux
-wget https://raw.githubusercontent.com/marquis-ng/termux-in-termux/main/tit.sh # download script
-chmod +x tit.sh # make downloaded script executable
-./tit.sh # activate Termux environment
+wget https://raw.githubusercontent.com/marquis-ng/termux-in-termux/main/tit # download script
+chmod +x tit # make downloaded script executable
+mv tit "$PREFIX/bin" # move it to $PATH
+tit --help # get help
 ```
 or for people who prefer one-liners:
 ```
-pkg install wget unzip proot; wget https://raw.githubusercontent.com/marquis-ng/termux-in-termux/main/tit.sh; chmod +x tit.sh; ./tit.sh
+pkg install wget unzip proot; wget https://raw.githubusercontent.com/marquis-ng/termux-in-termux/main/tit; chmod +x tit; mv tit "$PREFIX/bin"; tit --help
 ```
 That's all! What will greet you is a nice, clean, new Termux environment.
 
 ## Documentation
-### Run/install Termux-in-Termux:
+### Run Termux-in-Termux:
 ```bash
-./tit.sh
+tit install
+tit login
+# see more commands by running 'tit --help'
 ```
 
 ### Run a command in the sandbox:
 ```bash
-# ./tit.sh 'program [arguments]'
-./tit.sh 'ls -lA "/data/data/com.termux/files"'
+# ./tit.sh command -- program [arguments]
+tit login -- ls -lA "/data/data/com.termux/files"
 ```
-OR
-```bash
-# ./tit.sh program [arguments]
-# This way of running a command is NOT RECOMMENDED (see why below).
-./tit.sh ls -lA /data/data/com.termux/files
-```
-
-**Warning ⚠️⚠️⚠️: the latter way has some issues (e.g. arguments with spaces). Use the former way to execute a command in the sandbox.**
 
 ### Remove Termux-in-Termux:
 ```bash
-rm -rf tit.sh termux-fs # Remove the installation script and the sandbox
+rm -rf "$PREFIX/bin/tit" "$HOME"/termux{,-pacman}-fs{,32} # Remove the script and the sandbox
 ```
-
-### Environment variables:
-| Variable name | Default | Usage | Example |
-| :-- | :-- | :-- | :-- |
-| `TERMUX_PROOT_ARGS` | `(empty)` | Root directory of sandboxed Termux app | `export TERMUX_PROOT_ARGS"-b \"/sdcard/my dir:/dir\""` |
-| `TERMUX_32_BIT` | `false` | Install 32 bit Termux **(only works on 64 bit devices)** | `export TERMUX_32_BIT="true"` |
-| `TERMUX_PACMAN` | `false` | Install Termux with Pacman | `export TERMUX_PACMAN=true` |
-
-**Warning ⚠️⚠️⚠️: Termux bootstrap may not play well with a custom `TERMUX_APP_PATH`.**
-
 
 ### Ideas for the project:
 - Add emulated CPU architecture support (QEMU)
