@@ -30,12 +30,13 @@ That's all! What will greet you is a nice, clean, new Termux environment.
 ```bash
 tit install
 tit login
-# see more commands by running 'tit --help'
+tit remove
+# see details by running 'tit --help'
 ```
 
 ### Run a command in the sandbox:
 ```bash
-# ./tit.sh command -- program [arguments]
+# tit login -- program [arguments]
 tit login -- ls -lA "/data/data/com.termux/files"
 ```
 
