@@ -39,7 +39,7 @@ usage() {
 	"\033[1;36mCommands:"\
 	"  \033[31minstall \033[33m[--reset]"\
 	"      \033[34mInstall Termux-in-Termux sandbox."\
-	"  \033[31mlogin \033[33m[-b,--bind [DIR | FILE]] [-- [CMDLINE]]"\
+	"  \033[31mlogin \033[33m[-b,--bind [DIR | FILE] | -w,--workdir [DIR]] [-- [CMD]]"\
 	"      \033[34mLogin the sandbox."\
 	"  \033[31mremove \033[33m[-y,--yes]"\
 	"      \033[34mRemove the sandbox."\
@@ -228,6 +228,16 @@ tit_login() {
 				fi
 				TERMUX_PROOT_ARGS+=("-b" "$1")
 				;;
+			-w|--workdir)
+				if [ "$#" = 1 ]; then
+					usage "'--workdir' requires an argument."
+				fi
+				shift
+				if [ -z "$1" ]; then
+					usage "Please do not pass empty arguments."
+				fi
+				TERMUX_PROOT_ARGS+=("-w" "$1")
+				;;
 			--)
 				shift
 				INTERACTIVE=false
@@ -354,9 +364,9 @@ tit_du() {
 			continue
 		fi
 	 	if tit_check_installed; then
-				printf "\033[32m%s\033[0m: \033[34m%s\033[0m\n" "$(basename "$TERMUX_ROOTFS_PATH")" "$(du -sh "$TERMUX_ROOTFS_PATH" 2>/dev/null | awk "{printf(\$1)}")"
+			printf "\033[32m%s\033[0m: \033[34m%s\033[0m\n" "$(basename "$TERMUX_ROOTFS_PATH")" "$(du -sh "$TERMUX_ROOTFS_PATH" 2>/dev/null | awk "{printf(\$1)}")"
 		elif [ "$ONLY_INSTALLED" = false ]; then
-				printf "\033[32m%s\033[0m: \033[31m(not installed)\033[0m\n" "$(basename "$TERMUX_ROOTFS_PATH")"
+			printf "\033[32m%s\033[0m: \033[31m(not installed)\033[0m\n" "$(basename "$TERMUX_ROOTFS_PATH")"
 		fi
 	done
 }
