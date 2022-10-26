@@ -38,8 +38,11 @@ usage() {
 	"    \033[33m--pacman\033[0m: \033[34mUse Termux bootstrap with Pacman instead of APT.\n"\
 	"\033[1;36mCommands:"\
 	"  \033[31minstall \033[33m[--reset]"\
+	"      \033[34mInstall Termux-in-Termux sandbox."\
 	"  \033[31mlogin \033[33m[-b,--bind [DIR | FILE]] [-- [CMDLINE]]"\
-	"  \033[31mremove \033[33m[-y,--yes]" 1>&2
+	"      \033[34mLogin the sandbox."\
+	"  \033[31mremove \033[33m[-y,--yes]"\
+	"      \033[34mRemove the sandbox." 1>&2
 	exit "$EXITCODE"
 }
 
@@ -333,25 +336,24 @@ tit_remove() {
 ARGS=("$@")
 if [ "$#" = 0 ]; then
 	usage "No command is provided."
-else
-	case "$1" in
-		install)
-			shift
-			tit_install "$@"
-			;;
-		login)
-			shift
-			tit_login "$@"
-			;;
-		remove)
-			shift
-			tit_remove "$@"
-			;;
-		-h|--help)
-			usage -ne
-			;;
-		*)
-			usage "Unrecognized command: '$1'."
-			;;
-	esac
 fi
+case "$1" in
+	install)
+		shift
+		tit_install "$@"
+		;;
+	login)
+		shift
+		tit_login "$@"
+		;;
+	remove)
+		shift
+		tit_remove "$@"
+		;;
+	-h|--help)
+		usage -ne
+		;;
+	*)
+		usage "Unrecognized command: '$1'."
+		;;
+esac
