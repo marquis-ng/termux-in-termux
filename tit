@@ -42,7 +42,9 @@ usage() {
 	"  \033[31mlogin \033[33m[-b,--bind [DIR | FILE]] [-- [CMDLINE]]"\
 	"      \033[34mLogin the sandbox."\
 	"  \033[31mremove \033[33m[-y,--yes]"\
-	"      \033[34mRemove the sandbox." 1>&2
+	"      \033[34mRemove the sandbox."\
+	"  \033[31mdu \033[33m[-i,--installed]"\
+	"      \033[34mShow disk usage for each sandbox." 1>&2
 	exit "$EXITCODE"
 }
 
@@ -333,6 +335,32 @@ tit_remove() {
 	fi
 }
 
+tit_du() {
+	local ONLY_INSTALLED=false
+	while [ "$#" != 0 ]; do
+		case "$1" in
+			-i|--installed)
+				ONLY_INSTALLED=true
+				;;
+			*)
+				usage "Unrecognized option: '$1'."
+				;;
+		esac
+		shift
+	done
+
+	for TERMUX_ROOTFS_PATH in "$HOME"/termux{,-pacman}-fs{,32}; do
+		if [ "$IS64" != true ] && printf "%s\n" "$TERMUX_ROOTFS_PATH" | grep -q "32$"; then
+			continue
+		fi
+	 	if tit_check_installed; then
+				printf "\033[32m%s\033[0m: \033[34m%s\033[0m\n" "$(basename "$TERMUX_ROOTFS_PATH")" "$(du -sh "$TERMUX_ROOTFS_PATH" 2>/dev/null | awk "{printf(\$1)}")"
+		elif [ "$ONLY_INSTALLED" = false ]; then
+				printf "\033[32m%s\033[0m: \033[31m(not installed)\033[0m\n" "$(basename "$TERMUX_ROOTFS_PATH")"
+		fi
+	done
+}
+
 ARGS=("$@")
 if [ "$#" = 0 ]; then
 	usage "No command is provided."
@@ -349,6 +377,10 @@ case "$1" in
 	remove)
 		shift
 		tit_remove "$@"
+		;;
+	du)
+		shift
+		tit_du "$@"
 		;;
 	-h|--help)
 		usage -ne
