@@ -399,7 +399,9 @@ tit_backup() {
 	done
 	tit_set_vars
 
-	if [ -z "$DEST" ]; then
+	if ! tit_check_installed; then
+		error "System is not installed."
+	elif [ -z "$DEST" ]; then
 		error "You must set a destination using '--output'."
 	elif [ -e "$DEST" ]; then
 		if [ "$FORCE" != true ]; then
