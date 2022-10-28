@@ -27,24 +27,24 @@ usage() {
 		printf "\033[1;31m%b\033[0m\n" "$@" "" 1>&2
 	fi
 	printf "%b\033[0m\n" "\033[1;36mTermux-in-Termux \033[34m(by \033[32mmarquis-ng\033[34m)"\
-	"\033[33mAn isolated environment of Termux inside Termux."\
-	"\033[35mGitHub: https://github.com/marquis-ng/termux-in-termux\n"\
-	"\033[1;36mUsage:"\
-	"  \033[1;32m$PROGNAME \033[22;31mCOMMAND \033[33m[--32-bit | -p,--pacman] [args]"\
-	"  \033[1;32m$PROGNAME \033[22;31m-h"\
-	"  \033[1;32m$PROGNAME \033[22;31m--help"\
-	"    \033[33m--32-bit\033[0m: \033[34mInstall Termux with 32-bit prefix."\
-	"        \033[35m(Only works on 64-bit devices!)"\
-	"    \033[33m--pacman\033[0m: \033[34mUse Termux bootstrap with Pacman instead of APT.\n"\
-	"\033[1;36mCommands:"\
-	"  \033[31minstall \033[33m[--reset]"\
-	"      \033[34mInstall Termux-in-Termux sandbox."\
-	"  \033[31mlogin \033[33m[-b,--bind [DIR | FILE] | -w,--workdir [DIR]] [-- [CMD]]"\
-	"      \033[34mLogin the sandbox."\
-	"  \033[31mremove \033[33m[-y,--yes]"\
-	"      \033[34mRemove the sandbox."\
-	"  \033[31mdu \033[33m[-i,--installed]"\
-	"      \033[34mShow disk usage for each sandbox." 1>&2
+		"\033[33mAn isolated environment of Termux inside Termux."\
+		"\033[35mGitHub: https://github.com/marquis-ng/termux-in-termux\n"\
+		"\033[1;36mUsage:"\
+		"  \033[1;32m$PROGNAME \033[22;31mCOMMAND \033[33m[args]"\
+		"  \033[1;32m$PROGNAME \033[22;31m[-h,--help,help]\n"\
+		"\033[1;36mCommands:"\
+		"  \033[31minstall \033[33m[--32-bit | -p,--pacman | --reset]"\
+		"      \033[34mInstall Termux-in-Termux sandbox."\
+		"  \033[31mlogin \033[33m[--32-bit | -p,--pacman | -b,--bind [DIR | FILE] |\n          -w,--workdir [DIR]] [-- [CMD]]"\
+		"      \033[34mLogin the sandbox."\
+		"  \033[31mremove \033[33m[--32-bit | -p,--pacman | -y,--yes]"\
+		"      \033[34mRemove the sandbox."\
+		"  \033[31mdu \033[33m[-i,--installed]"\
+		"      \033[34mShow disk usage for each sandbox."\
+		"  \033[31mbackup \033[33m[--32-bit | -p,--pacman | -f,--force] -o,--output [FILE]"\
+		"      \033[34mBackup Termux-in-Termux."\
+		"  \033[31mrestore \033[33m[-y,--yes] -a,--archive [FILE]"\
+		"      \033[34mRestore a system backup." 1>&2
 	exit "$EXITCODE"
 }
 
@@ -157,11 +157,10 @@ tit_install() {
 		fi
 		info "Downloading Termux bootstrap..."
 		mkdir -p "$(dirname "$TERMUX_BOOTSTRAP_PATH")"
-		if wget "https://github.com/$SOURCE/releases/latest/download/bootstrap-$ARCH.zip" -q --show-progress -O "$TERMUX_BOOTSTRAP_PATH"; then
-			info "Termux bootstrap downloaded."
-		else
+		if ! wget "https://github.com/$SOURCE/releases/latest/download/bootstrap-$ARCH.zip" -q --show-progress -O "$TERMUX_BOOTSTRAP_PATH"; then
 			error "Failed to download Termux bootstrap."
 		fi
+		info "Termux bootstrap downloaded."
 	fi
 
 	info "Verifying integrity of bootstrap..."
@@ -188,11 +187,10 @@ tit_install() {
 		error "Failed to change directory. Abort."
 	fi
 	info "Extracting Termux bootstrap..."
-	if unzip -q "$TERMUX_BOOTSTRAP_PATH"; then
-		info "Termux bootstrap extracted."
-	else
+	if ! unzip -q "$TERMUX_BOOTSTRAP_PATH"; then
 		error "Failed to extract Termux bootstrap."
 	fi
+	info "Termux bootstrap extracted,"
 
 	info "Creating symlinks..."
 	while read -r LINK; do
@@ -338,11 +336,10 @@ tit_remove() {
 		error "Abort."
 	fi
 	info "Removing system..."
-	if rm -rf "$TERMUX_ROOTFS_PATH"; then
-		info "System is successfully removed."
-	else
+	if ! rm -rf "$TERMUX_ROOTFS_PATH"; then
 		error "Failed to remove system."
 	fi
+	info "System is successfully removed."
 }
 
 tit_du() {
@@ -371,6 +368,106 @@ tit_du() {
 	done
 }
 
+tit_backup() {
+	local DEST=""
+	local FORCE=false
+	while [ "$#" != 0 ]; do
+		case "$1" in
+			--32-bit)
+				TERMUX_32_BIT=true
+				;;
+			-p|--pacman)
+				TERMUX_PACMAN=true
+				;;
+			-f|--force)
+				FORCE=true
+				;;
+			-o|--output)
+				shift
+				if [ "$#" = 0 ]; then
+					usage "'--output' requires an argument."
+				elif [ "$DEST" != "" ]; then
+					error "Destination is already set."
+				fi
+				DEST="$1"
+				;;
+			*)
+				usage "Unrecognized option: '$1'."
+				;;
+		esac
+		shift
+	done
+	tit_set_vars
+
+	if [ -z "$DEST" ]; then
+		error "You must set a destination using '--output'."
+	elif [ -e "$DEST" ]; then
+		if [ "$FORCE" != true ]; then
+			error "Refuse to overwrite existing destination."
+		fi
+		info "Removing destination..."
+		if ! rm -rf "$DEST"; then
+			error "Failed to remove destination."
+		fi
+		info "Successfully removed destination."
+	fi
+
+	info "Generating metadata..."
+	local METADATA="${TMPDIR:-/tmp}/tit_metadata"
+	printf "%s=\"%s\"\n" "TERMUX_32_BIT" "$TERMUX_32_BIT"\
+		"TERMUX_PACMAN" "$TERMUX_PACMAN" > "$METADATA"
+	info "Metadata has been generated."
+	info "Archiving rootfs..."
+	if ! tar -cf "$DEST" -C "$(dirname "$METADATA")" "$(basename "$METADATA")" -C "$(dirname "$TERMUX_ROOTFS_PATH")" "$(basename "$TERMUX_ROOTFS_PATH")" > /dev/null; then
+			error "Failed to backup rootfs."
+		fi
+	info "Done! Backup is written to '$DEST'."
+}
+
+tit_restore() {
+	local ARCHIVE=""
+	while [ "$#" != 0 ]; do
+		case "$1" in
+			-y|--yes)
+				local ASK="--yes"
+				;;
+			-a|--archive)
+				shift
+				if [ "$#" = 0 ]; then
+					usage "'--archive' requires an argument."
+				elif [ "$ARCHIVE" != "" ]; then
+					error "You already chose an archive to restore."
+				fi
+				ARCHIVE="$1"
+				;;
+			*)
+				usage "Unrecognized option: '$1'."
+				;;
+		esac
+		shift
+	done
+
+	if [ -z "$ARCHIVE" ]; then
+		error "You must set an archive to restore using '--archive'."
+	elif [ ! -f "$ARCHIVE" ]; then
+		error "Archive does not exist or is a directory."
+	fi
+	# shellcheck source=/dev/null
+	. <(tar -xOf "$ARCHIVE" tit_metadata 2>/dev/null || printf "error \"Archive is not valid.\"\n")
+	tit_set_vars
+
+	if tit_check_installed; then
+		local PRESERVE=false
+		tit_remove $ASK
+	fi
+	mkdir -p "$TERMUX_ROOTFS_PATH"
+	info "Restoring system..."
+	if ! tar -xf "$ARCHIVE" -C "$TERMUX_ROOTFS_PATH" --strip-components 1 "$(basename "$TERMUX_ROOTFS_PATH")" > /dev/null; then
+		error "Failed to restore system."
+	fi
+	info "System is successfully restored."
+}
+
 ARGS=("$@")
 if [ "$#" = 0 ]; then
 	usage "No command is provided."
@@ -392,7 +489,15 @@ case "$1" in
 		shift
 		tit_du "$@"
 		;;
-	-h|--help)
+	backup)
+		shift
+		tit_backup "$@"
+		;;
+	restore)
+		shift
+		tit_restore "$@"
+		;;
+	-h|--help|help)
 		usage -ne
 		;;
 	*)
