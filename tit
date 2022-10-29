@@ -327,8 +327,9 @@ tit_remove() {
 	fi
 	local KEY
 	if [ "$ASK" = true ]; then
-		info "Remove system ($TERMUX_ROOTFS_PATH)?"
-		info "Press 'n' to abort. Press other keys to continue."
+		info "Remove system ($(basename "$TERMUX_ROOTFS_PATH"))?"
+		info "Press 'n' to abort or other keys to continue."
+		info "Answering 'Y' in 5 seconds."
 		read -rsn1 -t5 KEY
 	else
 		KEY="Y"
@@ -340,7 +341,7 @@ tit_remove() {
 	if ! rm -rf "$TERMUX_ROOTFS_PATH"; then
 		error "Failed to remove system."
 	fi
-	info "Removed system."
+	info "System removed."
 }
 
 tit_du() {
