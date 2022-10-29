@@ -13,15 +13,15 @@ It is extremely useful. Trust me. Anyway, here are some applications:
 ## I'm sold! But how can I install Termux-in-Termux?
 Installing Termux-in-Termux is as easy as a piece of cake:
 ```bash
-pkg install wget unzip proot # install dependencies for Termux-in-Termux
-wget https://raw.githubusercontent.com/marquis-ng/termux-in-termux/main/tit # download script
-chmod +x tit # make downloaded script executable
-mv tit "$PREFIX/bin" # move it to $PATH
+pkg install git wget unzip proot # install dependencies for Termux-in-Termux
+git clone https://github.com/marquis-ng/termux-in-termux # clone this repository
+cd termux-in-termux # cd to cloned directory
+./install.sh install # run install script
 tit --help # get help
 ```
 or for people who prefer one-liners:
 ```
-pkg install wget unzip proot; wget https://raw.githubusercontent.com/marquis-ng/termux-in-termux/main/tit; chmod +x tit; mv tit "$PREFIX/bin"; tit --help
+pkg install git wget unzip proot; git clone https://github.com/marquis-ng/termux-in-termux; cd termux-in-termux; ./install.sh install; tit --help
 ```
 That's all! What will greet you is a nice, clean, new Termux environment.
 
@@ -42,7 +42,7 @@ tit login -- ls -lA "/data/data/com.termux/files"
 
 ### Remove Termux-in-Termux:
 ```bash
-rm -rf "$PREFIX/bin/tit" "$HOME"/termux{,-pacman}-fs{,32} # Remove the script and the sandbox
+./install.sh uninstall # go to the dirctory of the cloned repository beforehand
 ```
 
 ### Ideas for the project:
