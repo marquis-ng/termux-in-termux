@@ -58,7 +58,7 @@ fi
 
 for DEP in wget unzip proot; do
 	if ! command -v "$DEP" > /dev/null; then
-		error "\"$DEP\" not found."
+		error "\"$DEP\" is not installed."
 	fi
 done
 
@@ -80,7 +80,7 @@ case "$(uname -m)" in
 		IS64=false
 		;;
 	*)
-		error "Architecture \"$(uname -m)\" not supported."
+		error "Architecture is not supported."
 		;;
 esac
 
@@ -109,7 +109,7 @@ tit_set_vars() {
 
 	if [ "$TERMUX_32_BIT" = true ]; then
 		if [ "$IS64" != true ]; then
-			error "'--32-bit' can only be used on 32-bit systems."
+			error "'--32-bit' cannot be used on 32-bit systems."
 		fi
 		TERMUX_ROOTFS_PATH+="32"
 		TERMUX_BOOTSTRAP_PATH="${TERMUX_BOOTSTRAP_PATH%.zip}32.zip"
@@ -135,7 +135,7 @@ tit_install() {
 				RESET=true
 				;;
 			*)
-				usage "Unrecognized option: '$1'"
+				usage "Unrecognized option: '$1'."
 				;;
 		esac
 		shift
@@ -150,7 +150,7 @@ tit_install() {
 		tit_remove
 	fi
 	if [ -f "$TERMUX_BOOTSTRAP_PATH" ]; then
-		info "Using downloaded Termux bootstrap."
+		info "Using cached Termux bootstrap."
 	else
 		if [ -e "$TERMUX_BOOTSTRAP_PATH" ]; then
 			rm -rf "$TERMUX_BOOTSTRAP_PATH"
@@ -160,7 +160,7 @@ tit_install() {
 		if ! wget "https://github.com/$SOURCE/releases/latest/download/bootstrap-$ARCH.zip" -q --show-progress -O "$TERMUX_BOOTSTRAP_PATH"; then
 			error "Failed to download Termux bootstrap."
 		fi
-		info "Termux bootstrap downloaded."
+		info "Bootstrap downloaded."
 	fi
 
 	info "Verifying integrity of bootstrap..."
@@ -174,23 +174,24 @@ tit_install() {
 		info "\033[31mSHA256 checksums do not match."
 		info "\033[31mExpected: $EXSHA"
 		info "\033[31mFound: $RSHA"
+		info "Removing corrupted/expired bootstrap..."
 		if rm -f "$TERMUX_BOOTSTRAP_PATH"; then
-			info "Removed corrupted/expired bootstrap. Rerunning script..."
+			info "Removed bootstrap. Rerunning script..."
 			exec "$(realpath -- "$0")" "${ARGS[@]}"
 		else
-			error "Failed to remove corrupted/outdated bootstrap. Abort."
+			error "Failed to remove the bootstrap."
 		fi
 	fi
 
 	mkdir -p "$TERMUX_ROOTFS_PATH"
 	if ! cd "$TERMUX_ROOTFS_PATH"; then
-		error "Failed to change directory. Abort."
+		error "Failed to change directory."
 	fi
 	info "Extracting Termux bootstrap..."
 	if ! unzip -q "$TERMUX_BOOTSTRAP_PATH"; then
 		error "Failed to extract Termux bootstrap."
 	fi
-	info "Termux bootstrap extracted,"
+	info "Extracted bootstrap."
 
 	info "Creating symlinks..."
 	while read -r LINK; do
@@ -199,10 +200,10 @@ tit_install() {
 	info "Created $(wc -l < SYMLINKS.txt) symlinks."
 	rm SYMLINKS.txt
 
-	info "Making common directories..."
+	info "Making some directories..."
 	mkdir -p home var/cache
-	info "Directories are successfully made."
-	info "Install finished without errors!"
+	info "Made directories."
+	info "Installation finished without any errors!"
 }
 
 tit_login() {
@@ -327,7 +328,7 @@ tit_remove() {
 	local KEY
 	if [ "$ASK" = true ]; then
 		info "Remove system ($TERMUX_ROOTFS_PATH)?"
-		info "Press 'n' to abort in 5 seconds."
+		info "Press 'n' to abort. Press other keys to continue."
 		read -rsn1 -t5 KEY
 	else
 		KEY="Y"
@@ -339,7 +340,7 @@ tit_remove() {
 	if ! rm -rf "$TERMUX_ROOTFS_PATH"; then
 		error "Failed to remove system."
 	fi
-	info "System is successfully removed."
+	info "Removed system."
 }
 
 tit_du() {
@@ -402,16 +403,16 @@ tit_backup() {
 	if ! tit_check_installed; then
 		error "System is not installed."
 	elif [ -z "$DEST" ]; then
-		error "You must set a destination using '--output'."
+		usage "Please set a destination using '--output'."
 	elif [ -e "$DEST" ]; then
 		if [ "$FORCE" != true ]; then
-			error "Refuse to overwrite existing destination."
+			error "Refusing to overwrite existing destination."
 		fi
 		info "Removing destination..."
 		if ! rm -rf "$DEST"; then
 			error "Failed to remove destination."
 		fi
-		info "Successfully removed destination."
+		info "Destination removed."
 	fi
 
 	info "Generating metadata..."
@@ -467,12 +468,12 @@ tit_restore() {
 	if ! tar -xf "$ARCHIVE" -C "$TERMUX_ROOTFS_PATH" --strip-components 1 "$(basename "$TERMUX_ROOTFS_PATH")" > /dev/null; then
 		error "Failed to restore system."
 	fi
-	info "System is successfully restored."
+	info "System restored ($(basename "$TERMUX_ROOTFS_PATH"))."
 }
 
 ARGS=("$@")
 if [ "$#" = 0 ]; then
-	usage "No command is provided."
+	usage "No command provided."
 fi
 case "$1" in
 	install)
