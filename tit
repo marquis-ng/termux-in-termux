@@ -114,10 +114,12 @@ tit_set_vars() {
 		TERMUX_ROOTFS_PATH+="32"
 		TERMUX_BOOTSTRAP_PATH="${TERMUX_BOOTSTRAP_PATH%.zip}32.zip"
 		if [ "$ARCH" = "aarch64" ]; then
-			ARCH="arm"
+			BOOTSTRAP_ARCH="arm"
 		else
-			ARCH="i686"
+			BOOTSTRAP_ARCH="i686"
 		fi
+	else
+		BOOTSTRAP_ARCH="$ARCH"
 	fi
 }
 
@@ -157,7 +159,7 @@ tit_install() {
 		fi
 		info "Downloading Termux bootstrap..."
 		mkdir -p "$(dirname "$TERMUX_BOOTSTRAP_PATH")"
-		if ! wget "https://github.com/$SOURCE/releases/latest/download/bootstrap-$ARCH.zip" -q --show-progress -O "$TERMUX_BOOTSTRAP_PATH"; then
+		if ! wget "https://github.com/$SOURCE/releases/latest/download/bootstrap-$BOOTSTRAP_ARCH.zip" -q --show-progress -O "$TERMUX_BOOTSTRAP_PATH"; then
 			error "Failed to download Termux bootstrap."
 		fi
 		info "Bootstrap downloaded."
@@ -329,7 +331,7 @@ tit_remove() {
 	if [ "$ASK" = true ]; then
 		info "Remove system ($(basename "$TERMUX_ROOTFS_PATH"))?"
 		info "Press 'n' to abort or other keys to continue."
-		info "Answering 'Y' in 5 seconds."
+		info "Answering 'y' in 5 seconds."
 		read -rsn1 -t5 KEY
 	else
 		KEY="Y"
@@ -419,7 +421,8 @@ tit_backup() {
 	info "Generating metadata..."
 	local METADATA="${TMPDIR:-/tmp}/tit_metadata"
 	printf "%s=\"%s\"\n" "TERMUX_32_BIT" "$TERMUX_32_BIT"\
-		"TERMUX_PACMAN" "$TERMUX_PACMAN" > "$METADATA"
+		"TERMUX_PACMAN" "$TERMUX_PACMAN"\
+		"BACKUP_HOST_ARCH" "$ARCH" > "$METADATA"
 	info "Metadata has been generated."
 	info "Archiving rootfs..."
 	if ! tar -cf "$DEST" -C "$(dirname "$METADATA")" "$(basename "$METADATA")" -C "$(dirname "$TERMUX_ROOTFS_PATH")" "$(basename "$TERMUX_ROOTFS_PATH")" > /dev/null; then
@@ -458,10 +461,13 @@ tit_restore() {
 	fi
 	# shellcheck source=/dev/null
 	. <(tar -xOf "$ARCHIVE" tit_metadata 2>/dev/null || printf "error \"Archive is not valid.\"\n")
+	if [ "$ARCH" != "$BACKUP_HOST_ARCH" ]; then
+		error "Device architectures mismatch. Refusing to restore backup."
+	fi
 	tit_set_vars
 
 	if tit_check_installed; then
-		local PRESERVE=false
+		local PRESERVE=true
 		tit_remove $ASK
 	fi
 	mkdir -p "$TERMUX_ROOTFS_PATH"
