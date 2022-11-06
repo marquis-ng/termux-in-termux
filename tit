@@ -265,6 +265,7 @@ tit_login() {
 			CMDLINE+=(-b "$DIR")
 		fi
 	done
+	CMDLINE+=(-b /linkerconfig/ld.config.txt)
 
 	CMDLINE+=(-b "$TERMUX_ROOTFS_PATH:$TERMUX_FILES_PATH/usr"
 		-b "$TERMUX_ROOTFS_PATH/home:$TERMUX_FILES_PATH/home"
