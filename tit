@@ -260,12 +260,11 @@ tit_login() {
 		CMDLINE+=("${TERMUX_PROOT_ARGS[@]}")
 	fi
 
-	for DIR in /dev /proc /sys /system /vendor /apex /sdcard "$PREFIX/..:/host-rootfs" /data/dalvik-cache; do
-		if [ -d "$DIR" ] || printf "%s\n" "$DIR" | grep -q "com\.termux"; then
-			CMDLINE+=(-b "$DIR")
+	for FILE in /dev /proc /sys /system /vendor /apex /sdcard "$PREFIX/..:/host-rootfs" /data/dalvik-cache /linkerconfig/ld.config.txt; do
+		if [ -e "$FILE" ]; then
+			CMDLINE+=(-b "$FILE")
 		fi
 	done
-	CMDLINE+=(-b /linkerconfig/ld.config.txt)
 
 	CMDLINE+=(-b "$TERMUX_ROOTFS_PATH:$TERMUX_FILES_PATH/usr"
 		-b "$TERMUX_ROOTFS_PATH/home:$TERMUX_FILES_PATH/home"
