@@ -98,12 +98,12 @@ tit_set_vars() {
 	fi
 	SOURCE="termux/termux-packages"
 	if [ "$TERMUX_PACMAN" = true ]; then
-		PREFIX="${TERMUX_ROOTFS_PATH%termux*}"
-		SUFFIX="${TERMUX_ROOTFS_PATH#"$PREFIX"}"
-		TERMUX_ROOTFS_PATH="$PREFIX${SUFFIX/termux/termux-pacman}"
-		PREFIX="${TERMUX_BOOTSTRAP_PATH%termux*}"
-		SUFFIX="${TERMUX_BOOTSTRAP_PATH#"$PREFIX"}"
-		TERMUX_BOOTSTRAP_PATH="$PREFIX${SUFFIX/termux/termux-pacman}"
+		FPREFIX="${TERMUX_ROOTFS_PATH%termux*}"
+		FSUFFIX="${TERMUX_ROOTFS_PATH#"$FPREFIX"}"
+		TERMUX_ROOTFS_PATH="$FPREFIX${FSUFFIX/termux/termux-pacman}"
+		FPREFIX="${TERMUX_BOOTSTRAP_PATH%termux*}"
+		FSUFFIX="${TERMUX_BOOTSTRAP_PATH#"$FPREFIX"}"
+		TERMUX_BOOTSTRAP_PATH="$FPREFIX${FSUFFIX/termux/termux-pacman}"
 		SOURCE="termux-pacman/termux-packages"
 	fi
 
@@ -261,7 +261,7 @@ tit_login() {
 	fi
 
 	for FILE in /dev /proc /sys /system /vendor /apex /sdcard "$PREFIX/..:/host-rootfs" /data/dalvik-cache /linkerconfig/ld.config.txt; do
-		if [ -e "$FILE" ]; then
+		if [ -e "${FILE%:*}" ]; then
 			CMDLINE+=(-b "$FILE")
 		fi
 	done
