@@ -260,7 +260,7 @@ tit_login() {
 		CMDLINE+=("${TERMUX_PROOT_ARGS[@]}")
 	fi
 
-	for FILE in /dev /proc /sys /system /vendor /apex /sdcard "$PREFIX/..:/host-rootfs" /data/dalvik-cache /linkerconfig/ld.config.txt; do
+	for FILE in /dev /proc /sys /system /vendor /apex /sdcard "${PREFIX:-/usr}/..:/host-rootfs" /data/dalvik-cache /linkerconfig/ld.config.txt; do
 		if [ -e "${FILE%:*}" ]; then
 			CMDLINE+=(-b "$FILE")
 		fi
@@ -280,6 +280,7 @@ tit_login() {
 		"ANDROID_ROOT=/system"
 		"EXTERNAL_STORAGE=/sdcard"
 		"LD_PRELOAD=$TERMUX_FILES_PATH/usr/lib/libtermux-exec.so"
+		"LD_LIBRARY_PATH=$TERMUX_FILES_PATH/usr/lib"
 		"TERM=${TERM=-xterm-256color}"
 		"COLORTERM=${TERM=-truecolor}"
 		"LANG=${LANG=-en_US.UTF-8}"
