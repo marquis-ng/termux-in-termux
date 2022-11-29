@@ -39,7 +39,7 @@ usage() {
 		"      \033[34mLogin the sandbox."\
 		"  \033[31mremove \033[33m[--32-bit | -p,--pacman | -y,--yes]"\
 		"      \033[34mRemove the sandbox."\
-		"  \033[31mdu \033[33m[-i,--installed]"\
+		"  \033[31mlist\033[33m[-i,--installed | -s,--size]"\
 		"      \033[34mShow disk usage for each sandbox."\
 		"  \033[31mbackup \033[33m[--32-bit | -p,--pacman | -f,--force] -o,--output [FILE]"\
 		"      \033[34mBackup Termux-in-Termux."\
@@ -347,12 +347,16 @@ tit_remove() {
 	info "System removed."
 }
 
-tit_du() {
+tit_list() {
 	local ONLY_INSTALLED=false
 	while [ "$#" != 0 ]; do
 		case "$1" in
 			-i|--installed)
 				ONLY_INSTALLED=true
+				;;
+			-s|--size)
+				ONLY_INSTALLED=true
+				SHOW_SIZE=true
 				;;
 			*)
 				usage "Unrecognized option: '$1'."
@@ -364,11 +368,16 @@ tit_du() {
 	for TERMUX_ROOTFS_PATH in "$HOME"/termux{,-pacman}-fs{,32}; do
 		if [ "$IS64" != true ] && printf "%s\n" "$TERMUX_ROOTFS_PATH" | grep -q "32$"; then
 			continue
-		fi
-	 	if tit_check_installed; then
-			printf "\033[32m%s\033[0m: \033[34m%s\033[0m\n" "$(basename "$TERMUX_ROOTFS_PATH")" "$(du -sh "$TERMUX_ROOTFS_PATH" 2>/dev/null | awk "{printf(\$1)}")"
-		elif [ "$ONLY_INSTALLED" = false ]; then
-			printf "\033[32m%s\033[0m: \033[31m(not installed)\033[0m\n" "$(basename "$TERMUX_ROOTFS_PATH")"
+		else
+			if tit_check_installed; then
+				if [ "$SHOW_SIZE" = true ]; then
+					printf "\033[32m%s\033[0m \033[34m%s\033[0m\n" "$(basename "$TERMUX_ROOTFS_PATH")" "$(du -sh "$TERMUX_ROOTFS_PATH" 2>/dev/null | awk "{printf(\$1)}")"
+				else
+					printf "\033[32m%s\033[0m\n" "$(basename "$TERMUX_ROOTFS_PATH")"
+				fi
+			elif [ "$ONLY_INSTALLED" = false ]; then
+				printf "\033[32m%s\033[0m \033[31m(not installed)\033[0m\n" "$(basename "$TERMUX_ROOTFS_PATH")"
+			fi
 		fi
 	done
 }
@@ -496,9 +505,9 @@ case "$1" in
 		shift
 		tit_remove "$@"
 		;;
-	du)
+	list)
 		shift
-		tit_du "$@"
+		tit_list "$@"
 		;;
 	backup)
 		shift
