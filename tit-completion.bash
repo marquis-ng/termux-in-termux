@@ -25,6 +25,22 @@ _tit_completions_filter() {
 	fi
 }
 
+_tit_completions_rootfs_flags() {
+	local COLOUR=""
+	if [ "$1" = "-n" ]; then
+		COLOUR="\[31m"
+		shift
+	fi
+	local FLAGS=()
+	if tit list "$@" | grep -q "${COLOUR}termux.*-fs32"; then
+		FLAGS+=("--32-bit")
+	fi
+	if tit list "$@" | grep -q "${COLOUR}termux-pacman-fs"; then
+		FLAGS+=("-p" "--pacman")
+	fi
+	printf "%s" "${FLAGS[*]}"
+}
+
 _tit_completions() {
 	local cur=${COMP_WORDS[COMP_CWORD]}
 	local compwords=("${COMP_WORDS[@]:1:$COMP_CWORD-1}")
@@ -52,27 +68,27 @@ _tit_completions() {
 		install*)
 			while read -r; do
 				COMPREPLY+=("$REPLY")
-			done < <(compgen -W "$(_tit_completions_filter "--32-bit -p --pacman --reset")" -- "$cur")
+			done < <(compgen -W "$(_tit_completions_filter "$(_tit_completions_rootfs_flags -n) --reset")" -- "$cur")
 			;;
 		login*)
 			while read -r; do
 				COMPREPLY+=("$REPLY")
-			done < <(compgen -W "$(_tit_completions_filter "--32-bit -p --pacman -b --bind -w --workdir")" -- "$cur")
+			done < <(compgen -W "$(_tit_completions_filter "$(_tit_completions_rootfs_flags -i) -b --bind -w --workdir")" -- "$cur")
 			;;
 		remove*)
 			while read -r; do
 				COMPREPLY+=("$REPLY")
-			done < <(compgen -W "$(_tit_completions_filter "--32-bit -p --pacman -y --yes")" -- "$cur")
+			done < <(compgen -W "$(_tit_completions_filter "$(_tit_completions_rootfs_flags -i) -y --yes")" -- "$cur")
 			;;
-		du*)
+		list*)
 			while read -r; do
 				COMPREPLY+=("$REPLY")
-			done < <(compgen -W "$(_tit_completions_filter "-i --installed")" -- "$cur")
+			done < <(compgen -W "$(_tit_completions_filter "-i --installed -s --size")" -- "$cur")
 			;;
 		backup*)
 			while read -r; do
 				COMPREPLY+=("$REPLY")
-			done < <(compgen -W "$(_tit_completions_filter "--32-bit -p --pacman -f --force -o --output")" -- "$cur")
+			done < <(compgen -W "$(_tit_completions_filter "$(_tit_completions_rootfs_flags -i) -f --force -o --output")" -- "$cur")
 			;;
 		restore*)
 			while read -r; do
@@ -82,7 +98,7 @@ _tit_completions() {
 		*)
 			while read -r; do
 				COMPREPLY+=("$REPLY")
-			done < <(compgen -W "$(_tit_completions_filter "install login remove du backup restore -h --help help")" -- "$cur")
+			done < <(compgen -W "$(_tit_completions_filter "install login remove list backup restore -h --help help")" -- "$cur")
 			;;
 	esac
 }
