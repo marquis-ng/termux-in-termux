@@ -368,16 +368,15 @@ tit_list() {
 	for TERMUX_ROOTFS_PATH in "$HOME"/termux{,-pacman}-fs{,32}; do
 		if [ "$IS64" != true ] && printf "%s\n" "$TERMUX_ROOTFS_PATH" | grep -q "32$"; then
 			continue
-		else
-			if tit_check_installed; then
-				if [ "$SHOW_SIZE" = true ]; then
-					printf "\033[32m%s\033[0m \033[34m%s\033[0m\n" "$(basename "$TERMUX_ROOTFS_PATH")" "$(du -sh "$TERMUX_ROOTFS_PATH" 2>/dev/null | awk "{printf(\$1)}")"
-				else
-					printf "\033[32m%s\033[0m\n" "$(basename "$TERMUX_ROOTFS_PATH")"
-				fi
-			elif [ "$ONLY_INSTALLED" = false ]; then
-				printf "\033[32m%s\033[0m \033[31m(not installed)\033[0m\n" "$(basename "$TERMUX_ROOTFS_PATH")"
+		fi
+		if tit_check_installed; then
+			if [ "$SHOW_SIZE" = true ]; then
+				printf "\033[32m%s\033[0m \033[34m%s\033[0m\n" "$(basename "$TERMUX_ROOTFS_PATH")" "$(du -sh "$TERMUX_ROOTFS_PATH" 2>/dev/null | awk "{printf(\$1)}")"
+			else
+				printf "\033[32m%s\033[0m\n" "$(basename "$TERMUX_ROOTFS_PATH")"
 			fi
+		elif [ "$ONLY_INSTALLED" = false ]; then
+			printf "\033[31m%s\033[0m\n" "$(basename "$TERMUX_ROOTFS_PATH")"
 		fi
 	done
 }
