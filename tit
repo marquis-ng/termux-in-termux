@@ -186,24 +186,21 @@ tit_install() {
 	fi
 
 	mkdir -p "$TERMUX_ROOTFS_PATH"
-	if ! cd "$TERMUX_ROOTFS_PATH"; then
-		error "Failed to change directory."
-	fi
 	info "Extracting Termux bootstrap..."
-	if ! unzip -q "$TERMUX_BOOTSTRAP_PATH"; then
+	if ! unzip -q "$TERMUX_BOOTSTRAP_PATH" -d "$TERMUX_ROOTFS_PATH"; then
 		error "Failed to extract Termux bootstrap."
 	fi
 	info "Extracted bootstrap."
 
 	info "Creating symlinks..."
 	while read -r LINK; do
-		(IFS="←"; read -r SRC DEST <<< "$LINK"; ln -sf "$SRC" "$DEST")
-	done < SYMLINKS.txt
-	info "Created $(wc -l < SYMLINKS.txt) symlinks."
-	rm SYMLINKS.txt
+		(IFS="←"; read -r SRC DEST <<< "$LINK"; ln -sf "$SRC" "$TERMUX_ROOTFS_PATH/$DEST")
+	done < "$TERMUX_ROOTFS_PATH/SYMLINKS.txt"
+	info "Created $(wc -l < "$TERMUX_ROOTFS_PATH/SYMLINKS.txt") symlinks."
+	rm "$TERMUX_ROOTFS_PATH/SYMLINKS.txt"
 
 	info "Making some directories..."
-	mkdir -p home var/cache
+	mkdir -p "$TERMUX_ROOTFS_PATH/home" "$TERMUX_ROOTFS_PATH/var/cache"
 	info "Made directories."
 	info "Installation finished without any errors!"
 }
