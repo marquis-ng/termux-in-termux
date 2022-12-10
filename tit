@@ -7,13 +7,37 @@ TERMUX_32_BIT=false
 TERMUX_PACMAN=false
 
 info() {
-	printf "\033[1;36m%b\033[0m\n" "$@"
+	printf "\033[36m[!] %b\033[0m\n" "$*"
 }
 
 error() {
-	printf "\033[1;31m%b\033[0m\n" "$@" 1>&2
-	exit 1
+	local EXIT=true
+	if [ "$1" = "-n" ]; then
+		EXIT=false
+		shift
+	fi
+	printf "\033[1;31m[x] %b\033[0m\n" "$*" 1>&2
+	if [ "$EXIT" = true ]; then
+		exit 1
+	fi
+	return 1
 }
+
+ok() {
+	printf "\033[32m[✓] %b\033[0m\n" "$*"
+}
+
+run() {
+	local ACTION="$1"
+	shift
+	info "$ACTION"
+	if ! "$@"; then
+		error "$ACTION"
+	fi
+	ok "$ACTION"
+}
+
+trap "error \"Received SIGINT\"" INT
 
 usage() {
 	local EXITCODE=1
@@ -24,45 +48,48 @@ usage() {
 		shift
 	fi
 	if [ "$#" != 0 ]; then
-		printf "\033[1;31m%b\033[0m\n" "$@" "" 1>&2
+		error -n "$@" 1>&2
+		printf "\n" 1>&2
 	fi
-	printf "%b\033[0m\n" "\033[1;36mTermux-in-Termux \033[34m(by \033[32mmarquis-ng\033[34m)"\
-		"\033[33mAn isolated environment of Termux inside Termux."\
-		"\033[35mGitHub: https://github.com/marquis-ng/termux-in-termux\n"\
-		"\033[1;36mUsage:"\
-		"  \033[1;32m$PROGNAME \033[22;31mCOMMAND \033[33m[args]"\
-		"  \033[1;32m$PROGNAME \033[22;31m[-h,--help,help]\n"\
-		"\033[1;36mCommands:"\
-		"  \033[31minstall \033[33m[--32-bit | -p,--pacman | --reset]"\
-		"      \033[34mInstall Termux-in-Termux sandbox."\
-		"  \033[31mlogin \033[33m[--32-bit | -p,--pacman | -b,--bind [DIR | FILE] |\n          -w,--workdir [DIR]] [-- [CMD]]"\
+	printf "%b\033[0m\n" "\033[1;33mTermux-in-Termux (by marquis-ng)"\
+		"\033[2mAn isolated environment of Termux inside Termux."\
+		"\033[2mGitHub: https://github.com/marquis-ng/termux-in-termux\n"\
+		"\033[1;33mUsage:"\
+		"  \033[32m$PROGNAME \033[22;35mCOMMAND \033[36m{ARGS[]}"\
+		"  \033[32m$PROGNAME \033[22;35m[-h,--help,help]\n"\
+		"\033[1;33mCommands:"\
+		"  \033[35minstall \033[36m[--32-bit | -p,--pacman | --reset]"\
+		"      \033[34mInstall the sandbox."\
+		"  \033[35mlogin \033[36m[--32-bit | -p,--pacman | -b,--bind {DIR | FILE} |\n          -w,--workdir {DIR}] [-- {CMD[]}]"\
 		"      \033[34mLogin the sandbox."\
-		"  \033[31mremove \033[33m[--32-bit | -p,--pacman | -y,--yes]"\
+		"  \033[35mremove \033[36m[--32-bit | -p,--pacman | -y,--yes]"\
 		"      \033[34mRemove the sandbox."\
-		"  \033[31mlist\033[33m[-i,--installed | -s,--size]"\
+		"  \033[35mlist \033[36m[-i,--installed | -s,--size]"\
 		"      \033[34mShow disk usage for each sandbox."\
-		"  \033[31mbackup \033[33m[--32-bit | -p,--pacman | -f,--force] -o,--output [FILE]"\
-		"      \033[34mBackup Termux-in-Termux."\
-		"  \033[31mrestore \033[33m[-y,--yes] -a,--archive [FILE]"\
-		"      \033[34mRestore a system backup." 1>&2
+		"  \033[35mbackup \033[36m[--32-bit | -p,--pacman | -f,--force] -o,--output {FILE}"\
+		"      \033[34mBackup the sandbox."\
+		"  \033[35mrestore \033[36m[-y,--yes] -a,--archive {FILE}"\
+		"      \033[34mRestore a backup made by the program." 1>&2
 	exit "$EXITCODE"
 }
 
-if [ "$(uname -o)"  != "Android" ]; then
-	error "This program should only be ran on Termux."
+UNAME="$(uname -o)"
+if [ "$UNAME"  != "Android" ]; then
+	error "Unsupported platform: '$UNAME'"
 fi
 
 if [ "$(id -u)" = 0 ]; then
-	error "This program should not be ran as root."
+	error "Detected root (UID=0)"
 fi
 
 for DEP in wget unzip proot; do
 	if ! command -v "$DEP" > /dev/null; then
-		error "\"$DEP\" is not installed."
+		error "Command not found: '$DEP'"
 	fi
 done
 
-case "$(uname -m)" in
+ARCH="$(uname -m)"
+case "$ARCH" in
 	aarch64|arm64)
 		ARCH="aarch64"
 		IS64=true
@@ -80,7 +107,7 @@ case "$(uname -m)" in
 		IS64=false
 		;;
 	*)
-		error "Architecture is not supported."
+		error "Unsupported architecture: $ARCH"
 		;;
 esac
 
@@ -109,7 +136,7 @@ tit_set_vars() {
 
 	if [ "$TERMUX_32_BIT" = true ]; then
 		if [ "$IS64" != true ]; then
-			error "'--32-bit' cannot be used on 32-bit systems."
+			error "Unsupported option: '--32-bit'"
 		fi
 		TERMUX_ROOTFS_PATH+="32"
 		TERMUX_BOOTSTRAP_PATH="${TERMUX_BOOTSTRAP_PATH%.zip}32.zip"
@@ -137,72 +164,50 @@ tit_install() {
 				RESET=true
 				;;
 			*)
-				usage "Unrecognized option: '$1'."
+				usage "Unrecognized option: '$1'"
 				;;
 		esac
 		shift
 	done
 	tit_set_vars
 
-	if tit_check_installed && [ "$RESET" = false ]; then
-		error "System is already installed."
-	fi
 	if tit_check_installed; then
+		if [ "$RESET" = false ]; then
+			error "Install destination exists"
+		fi
 		local PRESERVE=true
 		tit_remove
 	fi
+
 	if [ -f "$TERMUX_BOOTSTRAP_PATH" ]; then
-		info "Using cached Termux bootstrap."
+		info "Use cached Termux bootstrap"
 	else
 		if [ -e "$TERMUX_BOOTSTRAP_PATH" ]; then
-			rm -rf "$TERMUX_BOOTSTRAP_PATH"
+			run "Remove Termux bootstrap" rm -rf "$TERMUX_BOOTSTRAP_PATH"
 		fi
-		info "Downloading Termux bootstrap..."
 		mkdir -p "$(dirname "$TERMUX_BOOTSTRAP_PATH")"
-		if ! wget "https://github.com/$SOURCE/releases/latest/download/bootstrap-$BOOTSTRAP_ARCH.zip" -q --show-progress -O "$TERMUX_BOOTSTRAP_PATH"; then
-			error "Failed to download Termux bootstrap."
-		fi
-		info "Bootstrap downloaded."
+		run "Download Termux boostrap" wget "https://github.com/$SOURCE/releases/latest/download/bootstrap-$BOOTSTRAP_ARCH.zip" -q --show-progress -O "$TERMUX_BOOTSTRAP_PATH"
 	fi
 
-	info "Verifying integrity of bootstrap..."
-	# shellcheck disable=SC2155
-	local EXSHA="$(wget -qO- https://github.com/$SOURCE/releases/latest/download/bootstraps.sha256sum | awk "\$2 == \"bootstrap-$ARCH.zip\" {printf(\$1)}")"
-	# shellcheck disable=SC2155
-	local RSHA="$(sha256sum "$TERMUX_BOOTSTRAP_PATH" | awk "{printf(\$1)}")"
-	if [ "$EXSHA" == "$RSHA" ]; then
-		info "SHA256 matches."
-	else
-		info "\033[31mSHA256 checksums do not match."
-		info "\033[31mExpected: $EXSHA"
-		info "\033[31mFound: $RSHA"
-		info "Removing corrupted/expired bootstrap..."
-		if rm -f "$TERMUX_BOOTSTRAP_PATH"; then
-			info "Removed bootstrap. Rerunning script..."
+	if ! run "Verify SHA256" [ "$(wget -qO- https://github.com/$SOURCE/releases/latest/download/bootstraps.sha256sum | awk "\$2 == \"bootstrap-$ARCH.zip\" {printf(\$1)}")" =  "$(sha256sum "$TERMUX_BOOTSTRAP_PATH" | awk "{printf(\$1)}")" ]; then
+		if run "Remove corrupted/expired bootstrap" rm -f "$TERMUX_BOOTSTRAP_PATH"; then
+			info "Restart script"
 			exec "$(realpath -- "$0")" "${ARGS[@]}"
-		else
-			error "Failed to remove the bootstrap."
 		fi
 	fi
 
 	mkdir -p "$TERMUX_ROOTFS_PATH"
-	info "Extracting Termux bootstrap..."
-	if ! unzip -q "$TERMUX_BOOTSTRAP_PATH" -d "$TERMUX_ROOTFS_PATH"; then
-		error "Failed to extract Termux bootstrap."
-	fi
-	info "Extracted bootstrap."
+	run "Extract Termux bootstrap" unzip -q "$TERMUX_BOOTSTRAP_PATH" -d "$TERMUX_ROOTFS_PATH"
 
-	info "Creating symlinks..."
+	info "Create symlinks"
 	while read -r LINK; do
-		(IFS="←"; read -r SRC DEST <<< "$LINK"; ln -sf "$SRC" "$TERMUX_ROOTFS_PATH/$DEST")
+		if ! (IFS="←" && read -r SRC DEST <<< "$LINK" && ln -sf "$SRC" "$TERMUX_ROOTFS_PATH/$DEST"); then
+			error "Create symlinks"
+		fi
 	done < "$TERMUX_ROOTFS_PATH/SYMLINKS.txt"
-	info "Created $(wc -l < "$TERMUX_ROOTFS_PATH/SYMLINKS.txt") symlinks."
+	ok "Create $(wc -l < "$TERMUX_ROOTFS_PATH/SYMLINKS.txt") symlinks"
 	rm "$TERMUX_ROOTFS_PATH/SYMLINKS.txt"
-
-	info "Making some directories..."
 	mkdir -p "$TERMUX_ROOTFS_PATH/home" "$TERMUX_ROOTFS_PATH/var/cache"
-	info "Made directories."
-	info "Installation finished without any errors!"
 }
 
 tit_login() {
@@ -218,21 +223,21 @@ tit_login() {
 				;;
 			-b|--bind)
 				if [ "$#" = 1 ]; then
-					usage "'--bind' requires an argument."
+					usage "Missing parameter: '--bind'"
 				fi
 				shift
 				if [ -z "$1" ]; then
-					usage "Please do not pass empty arguments."
+					error "Invalid path: ''"
 				fi
 				TERMUX_PROOT_ARGS+=("-b" "$1")
 				;;
 			-w|--workdir)
 				if [ "$#" = 1 ]; then
-					usage "'--workdir' requires an argument."
+					usage "Missing parameter: '--workdir'"
 				fi
 				shift
 				if [ -z "$1" ]; then
-					usage "Please do not pass empty arguments."
+					error "Invalid path: ''"
 				fi
 				TERMUX_PROOT_ARGS+=("-w" "$1")
 				;;
@@ -242,7 +247,7 @@ tit_login() {
 				break
 				;;
 			*)
-				usage "Unrecognized option: '$1'."
+				usage "Unrecognized option: '$1'"
 				;;
 		esac
 		shift
@@ -250,7 +255,7 @@ tit_login() {
 	tit_set_vars
 
 	if ! tit_check_installed; then
-		error "System is not installed."
+		error "System not installed"
 	fi
 	local CMDLINE=(proot --kill-on-exit -r "$TERMUX_ROOTFS_PATH" -w "$TERMUX_FILES_PATH/home")
 	if [ "${#TERMUX_PROOT_ARGS[@]}" != 0 ]; then
@@ -292,7 +297,7 @@ tit_login() {
 		CMDLINE+=("$TERMUX_FILES_PATH/usr/bin/login")
 	else
 		if [ "$#" = 0 ]; then
-			usage "'--' must be followed by a command."
+			usage "Missing parameter: '--'"
 		fi
 		CMDLINE+=("$@")
 	fi
@@ -315,7 +320,7 @@ tit_remove() {
 				ASK=false
 				;;
 			*)
-				usage "Unrecognized option: '$1'."
+				usage "Unrecognized option: '$1'"
 				;;
 		esac
 		shift
@@ -323,25 +328,19 @@ tit_remove() {
 	tit_set_vars
 
 	if ! tit_check_installed; then
-		error "System is not installed."
+		error "System not installed"
 	fi
 	local KEY
 	if [ "$ASK" = true ]; then
-		info "Remove system ($(basename "$TERMUX_ROOTFS_PATH"))?"
-		info "Press 'n' to abort or other keys to continue."
-		info "Answering 'y' in 5 seconds."
+		info "Remove system ($(basename "$TERMUX_ROOTFS_PATH"))? [Y/n]"
 		read -rsn1 -t5 KEY
 	else
 		KEY="Y"
 	fi
 	if [ "${KEY^^}" = "N" ]; then
-		error "Abort."
+		error "Abort"
 	fi
-	info "Removing system..."
-	if ! rm -rf "$TERMUX_ROOTFS_PATH"; then
-		error "Failed to remove system."
-	fi
-	info "System removed."
+	run "Remove system" rm -rf "$TERMUX_ROOTFS_PATH"
 }
 
 tit_list() {
@@ -356,7 +355,7 @@ tit_list() {
 				SHOW_SIZE=true
 				;;
 			*)
-				usage "Unrecognized option: '$1'."
+				usage "Unrecognized option: '$1'"
 				;;
 		esac
 		shift
@@ -393,16 +392,19 @@ tit_backup() {
 				FORCE=true
 				;;
 			-o|--output)
+				if [ "$#" = 1 ]; then
+					usage "Missing parameter: '--output'"
+				fi
 				shift
-				if [ "$#" = 0 ]; then
-					usage "'--output' requires an argument."
+				if [ -z "$1" ]; then
+					error "Invalid destination: ''"
 				elif [ "$DEST" != "" ]; then
-					error "Destination is already set."
+					error "Set option: '--output'"
 				fi
 				DEST="$1"
 				;;
 			*)
-				usage "Unrecognized option: '$1'."
+				usage "Unrecognized option: '$1'"
 				;;
 		esac
 		shift
@@ -410,31 +412,27 @@ tit_backup() {
 	tit_set_vars
 
 	if ! tit_check_installed; then
-		error "System is not installed."
+		error "System not installed"
 	elif [ -z "$DEST" ]; then
-		usage "Please set a destination using '--output'."
+		usage "Unset option: '--output'"
 	elif [ -e "$DEST" ]; then
 		if [ "$FORCE" != true ]; then
-			error "Refusing to overwrite existing destination."
+			error "Destination exists"
 		fi
-		info "Removing destination..."
-		if ! rm -rf "$DEST"; then
-			error "Failed to remove destination."
-		fi
-		info "Destination removed."
+		run "Remove destination" rm -rf "$DEST"
 	fi
 
-	info "Generating metadata..."
+	info "Generate metadata"
 	local METADATA="${TMPDIR:-/tmp}/tit_metadata"
 	printf "%s=\"%s\"\n" "TERMUX_32_BIT" "$TERMUX_32_BIT"\
 		"TERMUX_PACMAN" "$TERMUX_PACMAN"\
 		"BACKUP_HOST_ARCH" "$ARCH" > "$METADATA"
-	info "Metadata has been generated."
-	info "Archiving rootfs..."
-	if ! tar -cf "$DEST" -C "$(dirname "$METADATA")" "$(basename "$METADATA")" -C "$(dirname "$TERMUX_ROOTFS_PATH")" "$(basename "$TERMUX_ROOTFS_PATH")" > /dev/null; then
-			error "Failed to backup rootfs."
+	ok "Generate metadata"
+	info "Backup sandbox"
+	if ! tar -cf "$DEST" -C "$(dirname "$METADATA")" "$(basename "$METADATA")" -C "$(dirname "$TERMUX_ROOTFS_PATH")" "$(basename "$TERMUX_ROOTFS_PATH")" &>/dev/null; then
+			error "Backup sandbox"
 		fi
-	info "Done! Backup is written to '$DEST'."
+	ok "Backup sandbox to '$DEST'"
 }
 
 tit_restore() {
@@ -445,30 +443,35 @@ tit_restore() {
 				local ASK="--yes"
 				;;
 			-a|--archive)
+				if [ "$#" = 1 ]; then
+					usage "Missing parameter: '--archive'"
+				fi
 				shift
-				if [ "$#" = 0 ]; then
-					usage "'--archive' requires an argument."
+				if [ -z "$1" ]; then
+					error "Invalid archive: ''"
 				elif [ "$ARCHIVE" != "" ]; then
-					error "You already chose an archive to restore."
+					error "Set option: '--archive'"
 				fi
 				ARCHIVE="$1"
 				;;
 			*)
-				usage "Unrecognized option: '$1'."
+				usage "Unrecognized option: '$1'"
 				;;
 		esac
 		shift
 	done
 
 	if [ -z "$ARCHIVE" ]; then
-		error "You must set an archive to restore using '--archive'."
+		error "Unset option: '--archive'"
 	elif [ ! -f "$ARCHIVE" ]; then
-		error "Archive does not exist or is a directory."
+		error "Invalid archive"
+	elif [ ! -r "$ARCHIVE" ]; then
+		error "Archive unreadable"
 	fi
 	# shellcheck source=/dev/null
-	. <(tar -xOf "$ARCHIVE" tit_metadata 2>/dev/null || printf "error \"Archive is not valid.\"\n")
+	. <(tar -xOf "$ARCHIVE" tit_metadata 2>/dev/null || printf "error \"Broken archive\"\n")
 	if [ "$ARCH" != "$BACKUP_HOST_ARCH" ]; then
-		error "Device architectures mismatch. Refusing to restore backup."
+		error "Device architectures mismatch ('$ARCH' != '$BACKUP_HOST_ARCH')"
 	fi
 	tit_set_vars
 
@@ -477,16 +480,16 @@ tit_restore() {
 		tit_remove $ASK
 	fi
 	mkdir -p "$TERMUX_ROOTFS_PATH"
-	info "Restoring system..."
-	if ! tar -xf "$ARCHIVE" -C "$TERMUX_ROOTFS_PATH" --strip-components 1 "$(basename "$TERMUX_ROOTFS_PATH")" > /dev/null; then
-		error "Failed to restore system."
+	info "Restore system"
+	if ! tar -xf "$ARCHIVE" -C "$TERMUX_ROOTFS_PATH" --strip-components 1 "$(basename "$TERMUX_ROOTFS_PATH")" &>/dev/null; then
+		error "Restore system"
 	fi
-	info "System restored ($(basename "$TERMUX_ROOTFS_PATH"))."
+	ok "Restore system to '$(basename "$TERMUX_ROOTFS_PATH")'"
 }
 
 ARGS=("$@")
 if [ "$#" = 0 ]; then
-	usage "No command provided."
+	usage "No command provided"
 fi
 case "$1" in
 	install)
@@ -517,6 +520,6 @@ case "$1" in
 		usage -ne
 		;;
 	*)
-		usage "Unrecognized command: '$1'."
+		usage "Unrecognized command: '$1'"
 		;;
 esac
