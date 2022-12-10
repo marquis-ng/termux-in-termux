@@ -340,7 +340,10 @@ tit_remove() {
 	if [ "${KEY^^}" = "N" ]; then
 		error "Abort"
 	fi
-	run "Remove system" rm -rf "$TERMUX_ROOTFS_PATH"
+	if ! rm -rf "$TERMUX_ROOTFS_PATH"; then
+		error "Remove system"
+	fi
+	ok "Remove system"
 }
 
 tit_list() {
