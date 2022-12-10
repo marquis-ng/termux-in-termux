@@ -28,11 +28,16 @@ ok() {
 }
 
 run() {
+	if [ "$1" = "-n" ]; then
+		local EXIT="-n"
+		shift
+	fi
 	local ACTION="$1"
 	shift
 	info "$ACTION"
 	if ! "$@"; then
-		error "$ACTION"
+		error $EXIT "$ACTION"
+		return 1
 	fi
 	ok "$ACTION"
 }
@@ -186,10 +191,10 @@ tit_install() {
 			run "Remove Termux bootstrap" rm -rf "$TERMUX_BOOTSTRAP_PATH"
 		fi
 		mkdir -p "$(dirname "$TERMUX_BOOTSTRAP_PATH")"
-		run "Download Termux boostrap" wget "https://github.com/$SOURCE/releases/latest/download/bootstrap-$BOOTSTRAP_ARCH.zip" -q --show-progress -O "$TERMUX_BOOTSTRAP_PATH"
+		run "Download Termux bootstrap" wget "https://github.com/$SOURCE/releases/latest/download/bootstrap-$BOOTSTRAP_ARCH.zip" -q --show-progress -O "$TERMUX_BOOTSTRAP_PATH"
 	fi
 
-	if ! run "Verify SHA256" [ "$(wget -qO- https://github.com/$SOURCE/releases/latest/download/bootstraps.sha256sum | awk "\$2 == \"bootstrap-$ARCH.zip\" {printf(\$1)}")" =  "$(sha256sum "$TERMUX_BOOTSTRAP_PATH" | awk "{printf(\$1)}")" ]; then
+	if ! run -n "Verify SHA256" [ "$(wget -qO- https://github.com/$SOURCE/releases/latest/download/bootstraps.sha256sum | awk "\$2 == \"bootstrap-$BOOTSTRAP_ARCH.zip\" {printf(\$1)}")" =  "$(sha256sum "$TERMUX_BOOTSTRAP_PATH" | awk "{printf(\$1)}")" ]; then
 		if run "Remove corrupted/expired bootstrap" rm -f "$TERMUX_BOOTSTRAP_PATH"; then
 			info "Restart script"
 			exec "$(realpath -- "$0")" "${ARGS[@]}"
