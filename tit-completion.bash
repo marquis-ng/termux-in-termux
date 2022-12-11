@@ -32,7 +32,7 @@ _tit_completions_rootfs_flags() {
 		shift
 	fi
 	local FLAGS=()
-	if tit list "$@" | grep -q "${COLOUR}termux.*-fs32"; then
+	if tit list "$@" | grep -q "${COLOUR}termux.*-fs32" && [ "$(uname -o)" != "GNU/Linux" ]; then
 		FLAGS+=("--32-bit")
 	fi
 	if tit list "$@" | grep -q "${COLOUR}termux-pacman-fs"; then

@@ -1,6 +1,7 @@
 #!/bin/bash
+TMPDIR="${TMPDIR:-/tmp}"
 TERMUX_ROOTFS_PATH="$(realpath -- "$HOME/termux-fs")"
-TERMUX_BOOTSTRAP_PATH="$(realpath -- "${TMPDIR:-/tmp}/termux-fs.zip")"
+TERMUX_BOOTSTRAP_PATH="$(realpath -- "$TMPDIR/termux-fs.zip")"
 TERMUX_APP_PATH="/data/data/com.termux"
 TERMUX_FILES_PATH="$TERMUX_APP_PATH/files"
 TERMUX_32_BIT=false
@@ -78,8 +79,11 @@ usage() {
 	exit "$EXITCODE"
 }
 
+DEPS=(wget unzip proot)
 UNAME="$(uname -o)"
-if [ "$UNAME"  != "Android" ]; then
+if [ "$UNAME" = "GNU/Linux" ]; then
+	DEPS+=(git)
+elif [ "$UNAME"  != "Android" ]; then
 	error "Unsupported platform: '$UNAME'"
 fi
 
@@ -87,7 +91,7 @@ if [ "$(id -u)" = 0 ]; then
 	error "Detected root (UID=0)"
 fi
 
-for DEP in wget unzip proot; do
+for DEP in "${DEPS[@]}"; do
 	if ! command -v "$DEP" > /dev/null; then
 		error "Command not found: '$DEP'"
 	fi
@@ -140,7 +144,7 @@ tit_set_vars() {
 	fi
 
 	if [ "$TERMUX_32_BIT" = true ]; then
-		if [ "$IS64" != true ]; then
+		if [ "$IS64" != true ] || [ "$UNAME" = "GNU/Linux" ]; then
 			error "Unsupported option: '--32-bit'"
 		fi
 		TERMUX_ROOTFS_PATH+="32"
@@ -178,6 +182,10 @@ tit_install() {
 
 	if tit_check_installed; then
 		if [ "$RESET" = false ]; then
+			if [ "$UNAME" = "GNU/Linux" ] && [ ! -e "$TERMUX_ROOTFS_PATH/system" ]; then
+				tit_install_android_base
+				exit 0
+			fi
 			error "Install destination exists"
 		fi
 		local PRESERVE=true
@@ -194,7 +202,7 @@ tit_install() {
 		run "Download Termux bootstrap" wget "https://github.com/$SOURCE/releases/latest/download/bootstrap-$BOOTSTRAP_ARCH.zip" -q --show-progress -O "$TERMUX_BOOTSTRAP_PATH"
 	fi
 
-	if ! run -n "Verify SHA256" [ "$(wget -qO- https://github.com/$SOURCE/releases/latest/download/bootstraps.sha256sum | awk "\$2 == \"bootstrap-$BOOTSTRAP_ARCH.zip\" {printf(\$1)}")" =  "$(sha256sum "$TERMUX_BOOTSTRAP_PATH" | awk "{printf(\$1)}")" ]; then
+	if ! run -n "Verify SHA256 of bootstrap" [ "$(wget -qO- https://github.com/$SOURCE/releases/latest/download/bootstraps.sha256sum | awk "\$2 == \"bootstrap-$BOOTSTRAP_ARCH.zip\" {printf(\$1)}")" =  "$(sha256sum "$TERMUX_BOOTSTRAP_PATH" | awk "{printf(\$1)}")" ]; then
 		if run "Remove corrupted/expired bootstrap" rm -f "$TERMUX_BOOTSTRAP_PATH"; then
 			info "Restart script"
 			exec "$(realpath -- "$0")" "${ARGS[@]}"
@@ -213,6 +221,43 @@ tit_install() {
 	ok "Create $(wc -l < "$TERMUX_ROOTFS_PATH/SYMLINKS.txt") symlinks"
 	rm "$TERMUX_ROOTFS_PATH/SYMLINKS.txt"
 	mkdir -p "$TERMUX_ROOTFS_PATH/home" "$TERMUX_ROOTFS_PATH/var/cache"
+	if [ "$UNAME" != "GNU/Linux" ]; then
+		exit 0
+	fi
+	tit_install_android_base
+}
+
+tit_install_android_base() {
+	ANDROID_BASE="$TMPDIR/android-base"
+	if [ -d "$ANDROID_BASE" ]; then
+		info "Use cached Android base"
+	else
+		if [ -f "$ANDROID_BASE" ]; then
+			run "Remove Android base" rm -f "$ANDROID_BASE"
+		fi
+		run "Download Android base" git clone -q --progress --depth 1 https://github.com/termux/termux-docker "$ANDROID_BASE"
+	fi
+
+	info "Verify integrity of Android base"
+	if [ "$(git -C "$ANDROID_BASE" config --get remote.origin.url 2>/dev/null)" != "https://github.com/termux/termux-docker" ] || [ "$(git -C "$ANDROID_BASE" status --porcelain | wc -l)" != 0 ]; then
+		error -n "Verify integrity of Android base"
+		if run "Remove Android base" rm -rf "$ANDROID_BASE"; then
+			info "Restart script"
+			exec "$(realpath -- "$0")" "${ARGS[@]}"
+		fi
+	fi
+	ok "Verify integrity of Android base"
+
+	case "$ARCH" in
+		aarch64|arm)
+			run "Copy Android base (arm)" cp -r "$ANDROID_BASE/system/arm" "$TERMUX_ROOTFS_PATH/system"
+			;;
+		x86_64|i686)
+			run "Copy Android base (x86)" cp -r "$ANDROID_BASE/system/x86" "$TERMUX_ROOTFS_PATH/system"
+			;;
+	esac
+	run "Copy static-dns-hosts.txt" cp "$ANDROID_BASE/static-dns-hosts.txt" "$TERMUX_ROOTFS_PATH/system/etc/static-dns-hosts.txt"
+	run -n "Update static DNS" "$(realpath -- "$0")" login -- /system/bin/update-static-dns &>/dev/null
 }
 
 tit_login() {
@@ -267,9 +312,13 @@ tit_login() {
 		CMDLINE+=("${TERMUX_PROOT_ARGS[@]}")
 	fi
 
-	for FILE in /dev /proc /sys /system /vendor /apex /sdcard "${PREFIX:-/usr}/..:/host-rootfs" /data/dalvik-cache /linkerconfig/ld.config.txt; do
-		if [ -e "${FILE%:*}" ]; then
-			CMDLINE+=(-b "$FILE")
+	BINDS=(/dev /proc /sys /sdcard "${PREFIX:-/usr}/..:/host-rootfs")
+	if [ "$UNAME" = "Android" ]; then
+		BINDS+=(/system /vendor /apex /data/dalvik-cache /linkerconfig/ld.config.txt)
+	fi
+	for BIND in "${BINDS[@]}"; do
+		if [ -e "${BIND%:*}" ]; then
+			CMDLINE+=(-b "$BIND")
 		fi
 	done
 
@@ -431,7 +480,7 @@ tit_backup() {
 	fi
 
 	info "Generate metadata"
-	local METADATA="${TMPDIR:-/tmp}/tit_metadata"
+	local METADATA="$TMPDIR/tit_metadata"
 	printf "%s=\"%s\"\n" "TERMUX_32_BIT" "$TERMUX_32_BIT"\
 		"TERMUX_PACMAN" "$TERMUX_PACMAN"\
 		"BACKUP_HOST_ARCH" "$ARCH" > "$METADATA"
