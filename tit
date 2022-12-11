@@ -79,7 +79,7 @@ usage() {
 	exit "$EXITCODE"
 }
 
-DEPS=(wget unzip proot)
+DEPS=(wget unzip tar proot)
 UNAME="$(uname -o)"
 if [ "$UNAME" = "GNU/Linux" ]; then
 	DEPS+=(git)
@@ -182,16 +182,24 @@ tit_install() {
 
 	if tit_check_installed; then
 		if [ "$RESET" = false ]; then
-			if [ "$UNAME" = "GNU/Linux" ] && [ ! -e "$TERMUX_ROOTFS_PATH/system" ]; then
+			if [ "$UNAME" = "Android" ]; then
+				error "Install destination exists"
+			elif [ ! -d "$TERMUX_ROOTFS_PATH/system" ]; then
 				tit_install_android_base
-				exit 0
+			elif [ ! -f "$TERMUX_ROOTFS_PATH/system/bin/busybox" ]; then
+				tit_install_busybox
+			else
+				error "Install destination exists"
 			fi
-			error "Install destination exists"
 		fi
 		local PRESERVE=true
 		tit_remove
 	fi
 
+	tit_install_bootstrap
+}
+
+tit_install_bootstrap() {
 	if [ -f "$TERMUX_BOOTSTRAP_PATH" ]; then
 		info "Use cached Termux bootstrap"
 	else
@@ -224,17 +232,19 @@ tit_install() {
 	if [ "$UNAME" != "GNU/Linux" ]; then
 		exit 0
 	fi
+
 	tit_install_android_base
 }
 
 tit_install_android_base() {
-	ANDROID_BASE="$TMPDIR/android-base"
+	local ANDROID_BASE="$TMPDIR/android-base"
 	if [ -d "$ANDROID_BASE" ]; then
 		info "Use cached Android base"
 	else
-		if [ -f "$ANDROID_BASE" ]; then
-			run "Remove Android base" rm -f "$ANDROID_BASE"
+		if [ -e "$ANDROID_BASE" ]; then
+			run "Remove Android base" rm -rf "$ANDROID_BASE"
 		fi
+		mkdir -p "$(dirname "$ANDROID_BASE")"
 		run "Download Android base" git clone -q --progress --depth 1 https://github.com/termux/termux-docker "$ANDROID_BASE"
 	fi
 
@@ -256,8 +266,55 @@ tit_install_android_base() {
 			run "Copy Android base (x86)" cp -r "$ANDROID_BASE/system/x86" "$TERMUX_ROOTFS_PATH/system"
 			;;
 	esac
-	run "Copy static-dns-hosts.txt" cp "$ANDROID_BASE/static-dns-hosts.txt" "$TERMUX_ROOTFS_PATH/system/etc/static-dns-hosts.txt"
-	run -n "Update static DNS" "$(realpath -- "$0")" login -- /system/bin/update-static-dns &>/dev/null
+	run "Change permissions of /system" chmod -R 755 "$ANDROID_BASE"
+
+	run "Remove old BusyBox" rm -f "$TERMUX_ROOTFS_PATH/system/bin/busybox"
+	tit_install_busybox
+}
+
+tit_install_busybox() {
+	declare -A BUSYBOX_URL=(
+		["aarch64"]="https://busybox.net/downloads/binaries/1.31.0-defconfig-multiarch-musl/busybox-armv8l"
+		["arm"]="https://busybox.net/downloads/binaries/1.31.0-defconfig-multiarch-musl/busybox-armv7l"
+		["x86_64"]="https://busybox.net/downloads/binaries/1.31.0-defconfig-multiarch-musl/busybox-x86_64"
+		["i686"]="https://busybox.net/downloads/binaries/1.31.0-defconfig-multiarch-musl/busybox-i686"
+	)
+	declare -A BUSYBOX_SHA=(
+		["aarch64"]="141adb1b625a6f44c4b114f76b4387b4ea4f7ab802b88eb40e0d2f6adcccb1c3"
+		["arm"]="cd04052b8b6885f75f50b2a280bfcbf849d8710c8e61d369c533acf307eda064"
+		["x86_64"]="51fcb60efbdf3e579550e9ab893730df56b33d0cc928a2a6467bd846cdfef7d8"
+		["i686"]="6c63a8623659aff24843d9b0720fa4aa216d44a5d60f29979a4073f3f80ce69c"
+	)
+	local BUSYBOX="$TMPDIR/busybox-$BOOTSTRAP_ARCH"
+	if [ -f "$BUSYBOX" ]; then
+		info "Use cached BusyBox binary"
+	else
+		if [ -e "$BUSYBOX" ]; then
+			run "Remove BusyBox binary" rm -rf "$BUSYBOX"
+		fi
+		mkdir -p "$(dirname "$BUSYBOX")"
+		run "Download new BusyBox binary" wget "${BUSYBOX_URL["$BOOTSTRAP_ARCH"]}" -q --show-progress -O "$BUSYBOX"
+	fi
+
+	if ! run -n "Verify SHA256 of BusyBox binary" [ "${BUSYBOX_SHA["$BOOTSTRAP_ARCH"]}" = "$(sha256sum "$BUSYBOX" | awk "{printf(\$1)}")" ]; then
+		if run "Remove corrupted BusyBox bianry" rm -f "$BUSYBOX"; then
+			info "Restart script"
+			exec "$(realpath -- "$0")" "${ARGS[@]}"
+		fi
+	fi
+	run "Install new BusyBox" cp "$BUSYBOX" "$TERMUX_ROOTFS_PATH/system/bin/busybox"
+	run "Grant execute permission" chmod +x "$BUSYBOX"
+
+	info "Install applets"
+	for TOOL in "[" "[[" arch ash awk base64 basename bc bunzip2 bzcat bzip2 cal cat chattr chgrp chmod chown chpst chroot cksum clear cmp comm cp cpio crond crontab cut date dc dd df diff dirname dos2unix du echo ed egrep env envdir expand expr factor fallocate false fgrep find free getopt grep gunzip gzip head hexdump hexedit hostname id ifconfig install ip kill killall less link linux32 linux64 ln login ls lsattr lsof lspci lzcat lzma lzop man md5sum mkdir mkdosfs mke2fs mkfifo mkfs.ext2 mkfs.minix mkfs.vfat mknod mkpasswd mkswap mktemp more mount mountpoint mpstat mv nc netstat nice nl nohup nologin nproc nuke od paste patch pgrep pidof ping ping6 pkill pmap printenv printf ps pstree pwd pwdx readlink realpath reset resume rev rm rmdir rx script scriptreplay sed seq sh sha1sum sha256sum sha3sum sha512sum shred shuf sleep split stat strings stty swapoff swapon switch_root tac tail tar tee telnet telnetd test time timeout top touch tr true truncate tty ttysize umount uname unexpand uniq unix2dos unlink unlzma unshare unxz unzip uptime usleep uudecode uuencode vi watch wc wget which who whoami whois xargs xxd xz xzcat yes zcat zcip; do
+		if ! ln -sf busybox "$TERMUX_ROOTFS_PATH/system/bin/$TOOL"; then
+			error "Install applets"
+		fi
+	done
+	ok "Install applets"
+
+	run "Copy static-dns-hosts.txt" cp "$TMPDIR/android-base/static-dns-hosts.txt" "$TERMUX_ROOTFS_PATH/system/etc/static-dns-hosts.txt"
+	run -n "Update static DNS" "$(realpath -- "$0")" login -- /system/bin/update-static-dns
 }
 
 tit_login() {
