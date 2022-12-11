@@ -191,6 +191,7 @@ tit_install() {
 			else
 				error "Install destination exists"
 			fi
+			exit 0
 		fi
 		local PRESERVE=true
 		tit_remove
