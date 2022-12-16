@@ -123,9 +123,14 @@ esac
 tit_check_installed() {
 	if [ "$(find "$TERMUX_ROOTFS_PATH" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l)" = 0 ]; then
 		return 1
-	else
+	elif [ "$UNAME" = "Android" ] || [ "$1" = "-n" ]; then
+		return 0
+	elif [ ! -d "$TERMUX_ROOTFS_PATH/system" ]; then
+		return 1
+	elif [ -f "$TERMUX_ROOTFS_PATH/system/bin/busybox" ]; then
 		return 0
 	fi
+	return 1
 }
 
 tit_set_vars() {
@@ -180,7 +185,7 @@ tit_install() {
 	done
 	tit_set_vars
 
-	if tit_check_installed; then
+	if tit_check_installed -n; then
 		if [ "$RESET" = false ]; then
 			if [ "$UNAME" = "Android" ]; then
 				error "Install destination exists"
@@ -438,7 +443,7 @@ tit_remove() {
 	done
 	tit_set_vars
 
-	if ! tit_check_installed; then
+	if ! tit_check_installed -n; then
 		error "System not installed"
 	fi
 	local KEY
@@ -589,7 +594,7 @@ tit_restore() {
 	fi
 	tit_set_vars
 
-	if tit_check_installed; then
+	if tit_check_installed -n; then
 		local PRESERVE=true
 		tit_remove $ASK
 	fi
