@@ -311,7 +311,16 @@ tit_install_busybox() {
 	run "Grant execute permission" chmod +x "$TERMUX_ROOTFS_PATH/system/bin/busybox"
 
 	info "Install applets"
-	for TOOL in "[" "[[" arch ash awk base64 basename bc bunzip2 bzcat bzip2 cal cat chattr chgrp chmod chown chpst chroot cksum clear cmp comm cp cpio crond crontab cut date dc dd df diff dirname dos2unix du echo ed egrep env envdir expand expr factor fallocate false fgrep find free getopt grep gunzip gzip head hexdump hexedit hostname id ifconfig install ip kill killall less link linux32 linux64 ln login ls lsattr lsof lspci lzcat lzma lzop man md5sum mkdir mkdosfs mke2fs mkfifo mkfs.ext2 mkfs.minix mkfs.vfat mknod mkpasswd mkswap mktemp more mount mountpoint mpstat mv nc netstat nice nl nohup nologin nproc nuke od paste patch pgrep pidof ping ping6 pkill pmap printenv printf ps pstree pwd pwdx readlink realpath reset resume rev rm rmdir rx script scriptreplay sed seq sh sha1sum sha256sum sha3sum sha512sum shred shuf sleep split stat strings stty swapoff swapon switch_root tac tail tar tee telnet telnetd test time timeout top touch tr true truncate tty ttysize umount uname unexpand uniq unix2dos unlink unlzma unshare unxz unzip uptime usleep uudecode uuencode vi watch wc wget which who whoami whois xargs xxd xz xzcat yes zcat zcip; do
+	for TOOL in "[" "[[" arch ash awk base64 basename bc bunzip2 bzcat bzip2 cal cat chattr chgrp chmod chown chpst chroot cksum\
+			clear cmp comm cp cpio crond crontab cut date dc dd df diff dirname dos2unix du echo ed egrep env\
+			envdir expand expr factor fallocate false fgrep find free getopt grep gunzip gzip head hexdump hexedit hostname id ifconfig install\
+			ip kill killall less link linux32 linux64 ln login ls lsattr lsof lspci lzcat lzma lzop man md5sum mkdir mkdosfs\
+			mke2fs mkfifo mkfs.ext2 mkfs.minix mkfs.vfat mknod mkpasswd mkswap mktemp more mount mountpoint mpstat mv nc netstat nice nl nohup nologin\
+			nproc nuke od paste patch pgrep pidof ping ping6 pkill pmap printenv printf ps pstree pwd pwdx readlink realpath reset\
+			resume rev rm rmdir rx script scriptreplay sed seq sh sha1sum sha256sum sha3sum sha512sum shred shuf sleep split stat strings\
+			stty swapoff swapon switch_root tac tail tar tee telnet telnetd test time timeout top touch tr true truncate tty ttysize\
+			umount uname unexpand uniq unix2dos unlink unlzma unshare unxz unzip uptime usleep uudecode uuencode vi watch wc wget which who\
+			whoami whois xargs xxd xz xzcat yes zcat zcip; do
 		if ! ln -sf busybox "$TERMUX_ROOTFS_PATH/system/bin/$TOOL"; then
 			error "Install applets"
 		fi
