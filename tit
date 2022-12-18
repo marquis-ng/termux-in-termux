@@ -43,7 +43,8 @@ run() {
 	ok "$ACTION"
 }
 
-trap "error \"Received SIGINT\"" INT
+unset cleanup
+trap "error -n \"Received SIGINT\"; if [ \"\$(type -t cleanup)\" = \"function\" ]; then run \"Cleaning up\" cleanup; fi; exit 1" INT
 
 usage() {
 	local EXITCODE=1
@@ -206,6 +207,10 @@ tit_install() {
 }
 
 tit_install_bootstrap() {
+	cleanup(){
+		rm -rf "$TERMUX_ROOTFS_PATH"
+	}
+
 	if [ -f "$TERMUX_BOOTSTRAP_PATH" ]; then
 		info "Use cached Termux bootstrap"
 	else
@@ -243,6 +248,10 @@ tit_install_bootstrap() {
 }
 
 tit_install_android_base() {
+	cleanup() {
+		rm -rf "$TERMUX_ROOTFS_PATH/system"
+	}
+
 	local ANDROID_BASE="$TMPDIR/android-base"
 	if [ -d "$ANDROID_BASE" ]; then
 		info "Use cached Android base"
@@ -278,6 +287,10 @@ tit_install_android_base() {
 }
 
 tit_install_busybox() {
+	cleanup() {
+		rm -f "$TERMUX_ROOTFS_PATH/system/bin/busybox"
+	}
+
 	declare -A BUSYBOX_URL=(
 		["aarch64"]="https://busybox.net/downloads/binaries/1.31.0-defconfig-multiarch-musl/busybox-armv8l"
 		["arm"]="https://busybox.net/downloads/binaries/1.31.0-defconfig-multiarch-musl/busybox-armv7l"
@@ -328,6 +341,7 @@ tit_install_busybox() {
 	ok "Install applets"
 
 	run "Copy static-dns-hosts.txt" cp "$TMPDIR/android-base/static-dns-hosts.txt" "$TERMUX_ROOTFS_PATH/system/etc/static-dns-hosts.txt"
+	unset cleanup
 	run -n "Update static DNS" "$(realpath -- "$0")" login -- /system/bin/update-static-dns
 }
 
@@ -558,6 +572,11 @@ tit_backup() {
 		"BACKUP_HOST_UNAME" "$UNAME" > "$METADATA"
 	ok "Generate metadata"
 	info "Backup sandbox"
+
+	cleanup() {
+		rm -f "$DEST"
+	}
+
 	if ! tar -cf "$DEST" -C "$(dirname "$METADATA")" "$(basename "$METADATA")" -C "$(dirname "$TERMUX_ROOTFS_PATH")" "$(basename "$TERMUX_ROOTFS_PATH")" &>/dev/null; then
 			error "Backup sandbox"
 		fi
@@ -612,6 +631,11 @@ tit_restore() {
 	fi
 	mkdir -p "$TERMUX_ROOTFS_PATH"
 	info "Restore system"
+
+	cleanup() {
+		rm -rf "$TERMUX_ROOTFS_PATH"
+	}
+
 	if ! tar -xf "$ARCHIVE" -C "$TERMUX_ROOTFS_PATH" --strip-components 1 "$(basename "$TERMUX_ROOTFS_PATH")" &>/dev/null; then
 		error "Restore system"
 	fi
