@@ -11,17 +11,16 @@ It is extremely useful. Trust me. Anyway, here are some applications:
 - Install different versions of the same package ("Hey, I am running 2 versions of Python!")
 
 ## I'm sold! But how can I install Termux-in-Termux?
-Installing Termux-in-Termux is as easy as a piece of cake:
+Installing Termux-in-Termux is as easy as a piece of cake (add `sudo` if necessary):
 ```bash
-pkg install git wget unzip proot # install dependencies for Termux-in-Termux
+apt update
+apt upgrade
+apt install git wget unzip proot # install dependencies for Termux-in-Termux
+apt install python3 # optional dependency for fuzzy string matching to suggest commands
 git clone https://github.com/marquis-ng/termux-in-termux # clone this repository
 cd termux-in-termux # cd to cloned directory
 ./install.sh install # run install script
 tit --help # get help
-```
-or for people who prefer one-liners:
-```
-pkg install git wget unzip proot; git clone https://github.com/marquis-ng/termux-in-termux; cd termux-in-termux; ./install.sh install; tit --help
 ```
 That's all! What will greet you is a nice, clean, new Termux environment.
 

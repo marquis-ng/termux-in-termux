@@ -46,6 +46,37 @@ run() {
 unset cleanup
 trap "error -n \"Received SIGINT\"; if [ \"\$(type -t cleanup)\" = \"function\" ]; then run \"Cleaning up\" cleanup; fi; exit 1" INT
 
+similar() {
+	if command -v python3 > /dev/null; then
+		python3 - <<- EOM
+		from functools import lru_cache
+
+		def lev_dist(s):
+		    @lru_cache(None)
+		    def min_dist(x, y):
+		        if x == len(s) or y == len(u):
+		            return len(s) - x + len(u) - y
+
+		        if s[x] == u[y]:
+		            return min_dist(x + 1, y + 1)
+
+		        return 1 + min(
+		            min_dist(x, y + 1),
+		            min_dist(x + 1, y),
+		            min_dist(x + 1, y + 1)
+		        )
+
+		    return min_dist(0, 0)
+
+		u="$1"
+		if len(u) == 0:
+		    print("")
+		else:
+    	    print("    \033[1;31mDo you mean: '" + min(("install", "login", "remove", "list", "backup", "restore", "help"), key=lev_dist) + "'?\033[0m\n")
+		EOM
+	fi
+}
+
 usage() {
 	local EXITCODE=1
 	# shellcheck disable=SC2155
@@ -675,6 +706,8 @@ case "$1" in
 		usage -ne
 		;;
 	*)
-		usage "Unrecognized command: '$1'"
+		error -n "Unrecognized command: '$1'"
+		similar "$1" 1>&2
+		usage
 		;;
 esac
