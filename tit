@@ -258,7 +258,7 @@ tit_install_bootstrap() {
 		run "Download Termux bootstrap" wget "https://github.com/$SOURCE/releases/latest/download/bootstrap-$BOOTSTRAP_ARCH.zip" -q --show-progress -O "$TERMUX_BOOTSTRAP_PATH"
 	fi
 
-	if ! run -n "Verify SHA256 of bootstrap" [ "$(wget -qO- https://github.com/$SOURCE/releases/latest/download/bootstraps.sha256sum | awk "\$2 == \"bootstrap-$BOOTSTRAP_ARCH.zip\" {printf(\$1)}")" =  "$(sha256sum "$TERMUX_BOOTSTRAP_PATH" | awk "{printf(\$1)}")" ]; then
+	if ! run -n "Verify SHA256 of bootstrap" [ "$(wget -qO- "https://github.com/$SOURCE/releases/latest/download/bootstraps.sha256sum" | awk "\$2 == \"bootstrap-$BOOTSTRAP_ARCH.zip\" {printf(\$1)}")" =  "$(sha256sum "$TERMUX_BOOTSTRAP_PATH" | awk "{printf(\$1)}")" ]; then
 		if run "Remove corrupted/expired bootstrap" rm -f "$TERMUX_BOOTSTRAP_PATH"; then
 			info "Restart script"
 			exec "$(realpath -- "$0")" "${ARGS[@]}"
@@ -328,18 +328,6 @@ tit_install_busybox() {
 		rm -f "$TERMUX_ROOTFS_PATH/system/bin/busybox"
 	}
 
-	declare -A BUSYBOX_URL=(
-		["aarch64"]="https://busybox.net/downloads/binaries/1.31.0-defconfig-multiarch-musl/busybox-armv8l"
-		["arm"]="https://busybox.net/downloads/binaries/1.31.0-defconfig-multiarch-musl/busybox-armv7l"
-		["x86_64"]="https://busybox.net/downloads/binaries/1.31.0-defconfig-multiarch-musl/busybox-x86_64"
-		["i686"]="https://busybox.net/downloads/binaries/1.31.0-defconfig-multiarch-musl/busybox-i686"
-	)
-	declare -A BUSYBOX_SHA=(
-		["aarch64"]="141adb1b625a6f44c4b114f76b4387b4ea4f7ab802b88eb40e0d2f6adcccb1c3"
-		["arm"]="cd04052b8b6885f75f50b2a280bfcbf849d8710c8e61d369c533acf307eda064"
-		["x86_64"]="51fcb60efbdf3e579550e9ab893730df56b33d0cc928a2a6467bd846cdfef7d8"
-		["i686"]="6c63a8623659aff24843d9b0720fa4aa216d44a5d60f29979a4073f3f80ce69c"
-	)
 	local BUSYBOX="$TMPDIR/busybox-$BOOTSTRAP_ARCH"
 	if [ -f "$BUSYBOX" ]; then
 		info "Use cached BusyBox binary"
@@ -348,10 +336,10 @@ tit_install_busybox() {
 			run "Remove BusyBox binary" rm -rf "$BUSYBOX"
 		fi
 		mkdir -p "$(dirname "$BUSYBOX")"
-		run "Download new BusyBox binary" wget "${BUSYBOX_URL["$BOOTSTRAP_ARCH"]}" -q --show-progress -O "$BUSYBOX"
+		run "Download new BusyBox binary" wget "https://github.com/marquis-ng/termux-in-termux/raw/main/busybox/busybox-$BOOTSTRAP_ARCH" -q --show-progress -O "$BUSYBOX"
 	fi
 
-	if ! run -n "Verify SHA256 of BusyBox binary" [ "${BUSYBOX_SHA["$BOOTSTRAP_ARCH"]}" = "$(sha256sum "$BUSYBOX" | awk "{printf(\$1)}")" ]; then
+	if ! run -n "Verify SHA256 of BusyBox binary" [ "$(wget -qO- https://raw.githubusercontent.com/marquis-ng/termux-in-termux/main/busybox/busybox.sha256sum | awk "\$2 == \"busybox-$BOOTSTRAP_ARCH\" {printf(\$1)}")" =  "$(sha256sum "$BUSYBOX" | awk "{printf(\$1)}")" ]; then
 		if run "Remove corrupted BusyBox bianry" rm -f "$BUSYBOX"; then
 			info "Restart script"
 			exec "$(realpath -- "$0")" "${ARGS[@]}"
