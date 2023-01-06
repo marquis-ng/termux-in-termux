@@ -258,7 +258,7 @@ tit_install_bootstrap() {
 		run "Download Termux bootstrap" wget "https://github.com/$SOURCE/releases/latest/download/bootstrap-$BOOTSTRAP_ARCH.zip" -q --show-progress -O "$TERMUX_BOOTSTRAP_PATH"
 	fi
 
-	if ! run -n "Verify SHA256 of bootstrap" [ "$(wget -qO- "https://github.com/$SOURCE/releases/latest/download/bootstraps.sha256sum" | awk "\$2 == \"bootstrap-$BOOTSTRAP_ARCH.zip\" {printf(\$1)}")" =  "$(sha256sum "$TERMUX_BOOTSTRAP_PATH" | awk "{printf(\$1)}")" ]; then
+	if ! run -n "Verify SHA256 of bootstrap" [ "$(wget -qO- "https://github.com/$SOURCE/releases/latest/download/CHECKSUMS-sha256.txt" | awk "\$1 == \"bootstrap-$BOOTSTRAP_ARCH.zip\" {printf(\$2)}")" =  "$(sha256sum "$TERMUX_BOOTSTRAP_PATH" | awk "{printf(\$1)}")" ]; then
 		if run "Remove corrupted/expired bootstrap" rm -f "$TERMUX_BOOTSTRAP_PATH"; then
 			info "Restart script"
 			exec "$(realpath -- "$0")" "${ARGS[@]}"
