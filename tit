@@ -55,9 +55,9 @@ similar() {
 	from difflib import get_close_matches
 	m = get_close_matches("$1", ("install", "login", "remove", "list", "backup", "restore", "help"))
 	if len(m) > 0:
-	        print(f"    \033[1;31mDo you mean: '{m[0]}'?\033[0m\n")
-	    else:
-	        print("")
+		print(f"    \033[1;31mDo you mean: '{m[0]}'?\033[0m\n")
+	else:
+		print("")
 	EOM
 }
 
