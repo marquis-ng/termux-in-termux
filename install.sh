@@ -1,14 +1,14 @@
 #!/bin/bash
 run() {
-	printf "\033[32m+ \033[34m%s\033[0m\n" "$*"
+	printf "+ %s\n" "$*"
 	if ! "$@"; then
-		printf "\033[1;31mCommand returned an error. Abort.\n" 1>&2
+		printf "Command returned an error. Abort.\n" 1>&2
 		exit 1
 	fi
 }
 
 msg() {
-	printf "\033[1;36m%s\033[0m\n" "$@"
+	printf "%s\n" "$@"
 }
 
 installer() {
