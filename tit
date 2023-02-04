@@ -39,8 +39,9 @@ ok() {
 }
 
 run() {
+	local EXIT=""
 	if [ "$1" = "-n" ]; then
-		local EXIT="-n"
+		EXIT="-n"
 		shift
 	fi
 	local ACTION="$1"
@@ -266,6 +267,7 @@ tit_install() {
 }
 
 tit_install_bootstrap() {
+	# shellcheck disable=SC2317
 	cleanup(){
 		rm -rf "$TERMUX_ROOTFS_PATH"
 	}
@@ -307,6 +309,7 @@ tit_install_bootstrap() {
 }
 
 tit_install_android_base() {
+	# shellcheck disable=SC2317
 	cleanup() {
 		rm -rf "${TERMUX_ROOTFS_PATH}/system"
 	}
@@ -346,6 +349,7 @@ tit_install_android_base() {
 }
 
 tit_install_busybox() {
+	# shellcheck disable=SC2317
 	cleanup() {
 		rm -f "${TERMUX_ROOTFS_PATH}/system/bin/busybox"
 	}
@@ -628,6 +632,7 @@ tit_backup() {
 }
 
 tit_restore() {
+	local ASK=""
 	local ARCHIVE=""
 	while [ "$#" != 0 ]; do
 		case "$1" in
