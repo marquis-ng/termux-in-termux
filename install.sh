@@ -32,8 +32,12 @@ uninstaller() {
 	msg "Done."
 }
 
-if [ "$(uname -o)" = "GNU/Linux" ]; then
+UNAME="$(uname -o)"
+if [ "$UNAME" = "GNU/Linux" ]; then
 	export PREFIX="$HOME/.local"
+elif [ "$UNAME" != "Android" ]; then
+	msg "Unsupported platform: '${UNAME}'"
+	exit 1
 fi
 BASE="$(realpath -- "$(dirname -- "$0")")"
 
