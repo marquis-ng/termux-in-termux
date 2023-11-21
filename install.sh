@@ -32,9 +32,11 @@ uninstaller() {
 	msg "Done."
 }
 
-# shellcheck disable=SC2155
-export PREFIX="$(realpath -- "${PREFIX:-/usr}")"
+if [ "$(uname -o)" = "GNU/Linux" ]; then
+	export PREFIX="$HOME/.local"
+fi
 BASE="$(realpath -- "$(dirname -- "$0")")"
+
 case "$1" in
 	install)
 		installer
