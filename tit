@@ -4,6 +4,7 @@ TERMUX_ROOTFS_PATH="$(realpath -- "${HOME}/termux-fs")"
 TERMUX_BOOTSTRAP_PATH="$(realpath -- "${TMPDIR}/termux-fs.zip")"
 TERMUX_APP_PATH="/data/data/com.termux"
 TERMUX_FILES_PATH="${TERMUX_APP_PATH}/files"
+TERMUX_MIRROR="https://packages.termux.dev/apt/termux-main"
 TERMUX_32_BIT=false
 TERMUX_PACMAN=false
 
@@ -17,14 +18,32 @@ BOLD=""
 DIM=""
 DEFAULT=""
 
+strcmp() {
+	# shellcheck disable=SC2254
+	case "$1" in
+		$2)
+			return 0
+			;;
+		*)
+			return 1
+			;;
+	esac
+}
+
 info() {
 	printf "${CYAN}[!] %b${DEFAULT}\n" "$*"
 }
 
 error() {
 	local EXIT=true
-	if [ "$1" = "-n" ]; then
-		EXIT=false
+	if strcmp "$1" "-*"; then
+		while IFS= read -rn1 c; do
+			case "$c" in
+				n)
+					EXIT=false
+					;;
+			esac
+		done <<< "$1"
 		shift
 	fi
 	printf "${BOLD}${RED}[x] %b${DEFAULT}\n" "$*" 1>&2
@@ -40,14 +59,24 @@ ok() {
 
 run() {
 	local EXIT=""
-	if [ "$1" = "-n" ]; then
-		EXIT="-n"
+	local MUTE=false
+	if strcmp "$1" "-*"; then
+		while IFS= read -rn1 c; do
+			case "$c" in
+				n)
+					EXIT="n"
+					;;
+				m)
+					MUTE=true
+					;;
+			esac
+		done <<< "$1"
 		shift
 	fi
 	local ACTION="$1"
 	shift
 	info "$ACTION"
-	if ! "$@"; then
+	if ([ "$MUTE" = true ] && exec > /dev/null 2>&1; ! "$@"); then
 		error $EXIT "$ACTION"
 		return 1
 	fi
@@ -120,9 +149,7 @@ usage() {
 
 DEPS=(wget unzip tar proot)
 UNAME="$(uname -o)"
-if [ "$UNAME" = "GNU/Linux" ]; then
-	DEPS+=(git)
-elif [ "$UNAME"  != "Android" ]; then
+if [ "$UNAME"  != "Android" ] && [ "$UNAME" != "GNU/Linux" ]; then
 	error "Unsupported platform: '${UNAME}'"
 fi
 
@@ -164,18 +191,18 @@ tit_check_installed() {
 		return 1
 	elif [ "$UNAME" = "Android" ] || [ "$1" = "-n" ]; then
 		return 0
-	elif [ ! -d "${TERMUX_ROOTFS_PATH}/system" ]; then
-		return 1
-	elif [ -f "${TERMUX_ROOTFS_PATH}/system/bin/busybox" ]; then
+	elif [ ! -f "${TERMUX_ROOTFS_PATH}/var/lib/dpkg/status" ] || ! grep -q "Package: bionic-host" "${TERMUX_ROOTFS_PATH}/var/lib/dpkg/status" || [ ! -f "${TERMUX_ROOTFS_PATH}/system/bin/busybox" ]; then
+		return 2
+	else
 		return 0
 	fi
-	return 1
 }
 
 tit_set_vars() {
 	if [ "$PRESERVE" = true ]; then
 		return 0
 	fi
+
 	SOURCE="termux/termux-packages"
 	if [ "$TERMUX_PACMAN" = true ]; then
 		FPREFIX="${TERMUX_ROOTFS_PATH%termux*}"
@@ -201,6 +228,15 @@ tit_set_vars() {
 	else
 		BOOTSTRAP_ARCH="$ARCH"
 	fi
+
+	case "$BOOTSTRAP_ARCH" in
+		aarch64|arm)
+			BUSYBOX_ARCH="armv7l"
+			;;
+		x86_64|i686)
+			BUSYBOX_ARCH="i686"
+			;;
+	esac
 }
 
 tit_install() {
@@ -224,32 +260,25 @@ tit_install() {
 	done
 	tit_set_vars
 
-	if tit_check_installed -n; then
-		if [ "$RESET" = false ]; then
-			if [ "$UNAME" = "Android" ]; then
-				error "Install destination exists"
-			elif [ ! -d "${TERMUX_ROOTFS_PATH}/system" ]; then
-				tit_install_android_base
-			elif [ ! -f "${TERMUX_ROOTFS_PATH}/system/bin/busybox" ]; then
-				tit_install_busybox
-			else
-				error "Install destination exists"
-			fi
-			exit 0
-		fi
+	if [ "$RESET" = true ] && tit_check_installed -n; then
 		local PRESERVE=true
 		tit_remove
 	fi
 
-	tit_install_bootstrap
+	case "$(tit_check_installed; printf "%s" "$?")" in
+		0)
+			error "Install destination exists"
+			;;
+		1)
+			tit_install_bootstrap
+			;;
+		2)
+			tit_install_system
+			;;
+	esac
 }
 
 tit_install_bootstrap() {
-	# shellcheck disable=SC2317
-	cleanup(){
-		rm -rf "$TERMUX_ROOTFS_PATH"
-	}
-
 	if [ -f "$TERMUX_BOOTSTRAP_PATH" ]; then
 		info "Use cached Termux bootstrap"
 	else
@@ -267,8 +296,13 @@ tit_install_bootstrap() {
 		fi
 	fi
 
+	#shellcheck disable=SC2317
+	cleanup() {
+		rm -rf "$TERMUX_ROOTFS_PATH"
+	}
+
 	mkdir -p "$TERMUX_ROOTFS_PATH"
-	run "Extract Termux bootstrap" unzip -q "$TERMUX_BOOTSTRAP_PATH" -d "$TERMUX_ROOTFS_PATH"
+	run "Extract Termux bootstrap" unzip -oq "$TERMUX_BOOTSTRAP_PATH" -d "$TERMUX_ROOTFS_PATH"
 
 	info "Create symlinks"
 	while read -r LINK; do
@@ -279,60 +313,19 @@ tit_install_bootstrap() {
 	ok "Create $(wc -l < "${TERMUX_ROOTFS_PATH}/SYMLINKS.txt") symlinks"
 	rm "${TERMUX_ROOTFS_PATH}/SYMLINKS.txt"
 	mkdir -p "${TERMUX_ROOTFS_PATH}/home" "${TERMUX_ROOTFS_PATH}/var/cache"
-	if [ "$UNAME" != "GNU/Linux" ]; then
-		exit 0
+
+	unset cleanup
+
+	if [ "$UNAME" == "GNU/Linux" ]; then
+		tit_install_system
 	fi
 
-	tit_install_android_base
 }
 
-tit_install_android_base() {
-	# shellcheck disable=SC2317
-	cleanup() {
-		rm -rf "${TERMUX_ROOTFS_PATH}/system"
-	}
+tit_install_system() {
+	local BUSYBOX="${TMPDIR}/busybox-${BUSYBOX_ARCH}"
+	local BUSYBOX_URL="https://busybox.net/downloads/binaries/1.31.0-defconfig-multiarch-musl/busybox-${BUSYBOX_ARCH}"
 
-	local ANDROID_BASE="${TMPDIR}/android-base"
-	if [ -d "$ANDROID_BASE" ]; then
-		info "Use cached Android base"
-	else
-		if [ -e "$ANDROID_BASE" ]; then
-			run "Remove Android base" rm -rf "$ANDROID_BASE"
-		fi
-		mkdir -p "$(dirname "$ANDROID_BASE")"
-		run "Download Android base" git clone -q --progress --depth 1 https://github.com/termux/termux-docker "$ANDROID_BASE"
-	fi
-
-	info "Verify integrity of Android base"
-	if [ "$(git -C "$ANDROID_BASE" config --get remote.origin.url 2>/dev/null)" != "https://github.com/termux/termux-docker" ] || [ "$(git -C "$ANDROID_BASE" status --porcelain | wc -l)" != 0 ]; then
-		error -n "Verify integrity of Android base"
-		if run "Remove Android base" rm -rf "$ANDROID_BASE"; then
-			info "Restart script"
-			exec "$(realpath -- "$0")" "${ARGS[@]}"
-		fi
-	fi
-	ok "Verify integrity of Android base"
-
-	case "$ARCH" in
-		aarch64|arm)
-			run "Copy Android base (arm)" cp -r "${ANDROID_BASE}/system/arm" "${TERMUX_ROOTFS_PATH}/system"
-			;;
-		x86_64|i686)
-			run "Copy Android base (x86)" cp -r "${ANDROID_BASE}/system/x86" "${TERMUX_ROOTFS_PATH}/system"
-			;;
-	esac
-
-	run "Remove old BusyBox" rm -f "${TERMUX_ROOTFS_PATH}/system/bin/busybox"
-	tit_install_busybox
-}
-
-tit_install_busybox() {
-	# shellcheck disable=SC2317
-	cleanup() {
-		rm -f "${TERMUX_ROOTFS_PATH}/system/bin/busybox"
-	}
-
-	local BUSYBOX="${TMPDIR}/busybox-${BOOTSTRAP_ARCH}"
 	if [ -f "$BUSYBOX" ]; then
 		info "Use cached BusyBox binary"
 	else
@@ -340,42 +333,74 @@ tit_install_busybox() {
 			run "Remove BusyBox binary" rm -rf "$BUSYBOX"
 		fi
 		mkdir -p "$(dirname "$BUSYBOX")"
-		run "Download new BusyBox binary" wget "https://github.com/marquis-ng/termux-in-termux/raw/main/busybox/busybox-${BOOTSTRAP_ARCH}" -q --show-progress -O "$BUSYBOX"
+		run "Download BusyBox binary" wget "$BUSYBOX_URL" -q --show-progress -O "$BUSYBOX"
 	fi
 
-	if ! run -n "Verify SHA256 of BusyBox binary" [ "$(wget -qO- https://raw.githubusercontent.com/marquis-ng/termux-in-termux/main/busybox/busybox.sha256sum | awk "\$2 == \"busybox-${BOOTSTRAP_ARCH}\" {printf(\$1)}")" =  "$(sha256sum "$BUSYBOX" | awk "{printf(\$1)}")" ]; then
+	if ! run -n "Verify size of BusyBox binary" [ "$(wget --spider "$BUSYBOX_URL" 2>&1 | awk "\$1 == \"Length:\" {printf(\$2)}")" = "$(wc -c "$BUSYBOX" | awk "{printf(\$1)}")" ] || {
+		[ ! -x "$BUSYBOX" ] && run "Grant execute permission" chmod +x "$BUSYBOX"
+		! run -n "Verify functionality of BusyBox" [ "$("$BUSYBOX" echo "hello world")" = "hello world" ]
+	}; then
 		if run "Remove corrupted BusyBox bianry" rm -f "$BUSYBOX"; then
 			info "Restart script"
 			exec "$(realpath -- "$0")" "${ARGS[@]}"
 		fi
 	fi
-	run "Install new BusyBox" cp "$BUSYBOX" "${TERMUX_ROOTFS_PATH}/system/bin/busybox"
-	run "Grant execute permission" chmod +x "${TERMUX_ROOTFS_PATH}/system/bin/busybox"
 
-	info "Install applets"
-	for TOOL in "[" "[[" arch ash awk base64 basename bc bunzip2 bzcat bzip2 cal cat chattr chgrp chmod chown chpst chroot cksum\
-			clear cmp comm cp cpio crond crontab cut date dc dd df diff dirname dos2unix du echo ed egrep env\
-			envdir expand expr factor fallocate false fgrep find free getopt grep gunzip gzip head hexdump hexedit hostname id ifconfig install\
-			ip kill killall less link linux32 linux64 ln login ls lsattr lsof lspci lzcat lzma lzop man md5sum mkdir mkdosfs\
-			mke2fs mkfifo mkfs.ext2 mkfs.minix mkfs.vfat mknod mkpasswd mkswap mktemp more mount mountpoint mpstat mv nc netstat nice nl nohup nologin\
-			nproc nuke od paste patch pgrep pidof ping ping6 pkill pmap printenv printf ps pstree pwd pwdx readlink realpath reset\
-			resume rev rm rmdir rx script scriptreplay sed seq sh sha1sum sha256sum sha3sum sha512sum shred shuf sleep split stat strings\
-			stty swapoff swapon switch_root tac tail tar tee telnet telnetd test time timeout top touch tr true truncate tty ttysize\
-			umount uname unexpand uniq unix2dos unlink unlzma unshare unxz unzip uptime usleep uudecode uuencode vi watch wc wget which who\
-			whoami whois xargs xxd xz xzcat yes zcat zcip; do
-		if ! ln -sf busybox "${TERMUX_ROOTFS_PATH}/system/bin/${TOOL}"; then
-			error "Install applets"
+	local BIONIC_HOST="${TMPDIR}/bionic-host-${BOOTSTRAP_ARCH}.deb"
+	info "Get information about bionic-host"
+	#shellcheck disable=SC1090
+	. <(wget -qO- "${TERMUX_MIRROR}/dists/stable/main/binary-${BOOTSTRAP_ARCH}/Packages" | awk "
+		\$0 == \"Package: bionic-host\" {f=1}
+		f {
+			if (\$1 == \"Filename:\") filename=\$2
+			else if (\$1 == \"SHA256:\") sha256=\$2
+			if (filename && sha256) {
+				printf(\"local BIONIC_HOST_FILENAME=%s local BIONIC_HOST_SHA256=%s\", filename, sha256)
+				exit
+			}
+		}
+	")
+
+	if [ -f "$BIONIC_HOST" ]; then
+		info "Use cached bionic-host"
+	else
+		if [ -e "$BIONIC_HOST" ]; then
+			run "Remove bionic-host" rm -rf "$BIONIC_HOST"
 		fi
-	done
-	ok "Install applets"
+		mkdir -p "$(dirname "$BIONIC_HOST")"
+		run "Download bionic-host" wget "${TERMUX_MIRROR}/${BIONIC_HOST_FILENAME}" -q --show-progress -O "$BIONIC_HOST"
+	fi
 
-	run "Copy static-dns-hosts.txt" cp "${TMPDIR}/android-base/static-dns-hosts.txt" "${TERMUX_ROOTFS_PATH}/system/etc/static-dns-hosts.txt"
-	unset cleanup
-	run -n "Update static DNS" "$(realpath -- "$0")" login -- /system/bin/update-static-dns
+	if ! run -n "Verify SHA256 of bionic-host" [ "$BIONIC_HOST_SHA256" =  "$(sha256sum "$BIONIC_HOST" | awk "{printf(\$1)}")" ]; then
+		if run "Remove corrupted/expired bionic-host" rm -f "$BIONIC_HOST"; then
+			info "Restart script"
+			exec "$(realpath -- "$0")" "${ARGS[@]}"
+		fi
+	fi
+
+	run -m "Install bionic-host" proot -r "$TERMUX_ROOTFS_PATH" -w / -b "$TMPDIR" -b "${TERMUX_ROOTFS_PATH}:${TERMUX_FILES_PATH}/usr" "$BUSYBOX" dpkg -i "$BIONIC_HOST"
+	run "Link bionic-host" ln -sf "opt/bionic-host" "$TERMUX_ROOTFS_PATH/system"
+
+	mkdir -p "${TERMUX_ROOTFS_PATH}/system/bin"
+	run "Copy BusyBox to Termux" cp "$BUSYBOX" "${TERMUX_ROOTFS_PATH}/system/bin/busybox"
+	run "Install applets" "${TERMUX_ROOTFS_PATH}/system/bin/busybox" --install -s "${TERMUX_ROOTFS_PATH}/system/bin"
 }
 
 tit_login() {
-	local TERMUX_PROOT_ARGS=()
+	local WORKDIR="${TERMUX_FILES_PATH}/home"
+	local BINDS=(/dev /proc /sys "${PREFIX:-/usr}/..:/host-rootfs"
+		"${TERMUX_ROOTFS_PATH}:${TERMUX_FILES_PATH}/usr"
+		"${TERMUX_ROOTFS_PATH}/home:${TERMUX_FILES_PATH}/home"
+		"${TERMUX_ROOTFS_PATH}/var/cache:${TERMUX_APP_PATH}/cache"
+	)
+	if [ "$UNAME" = "Android" ]; then
+		for BIND in /sdcard /system /vendor /apex /data/dalvik-cache /linkerconfig/ld.config.txt; do
+			if [ -e "$BIND" ]; then
+				BINDS+=("$BIND")
+			fi
+		done
+	fi
+
 	local INTERACTIVE=true
 	while [ "$#" != 0 ]; do
 		case "$1" in
@@ -393,7 +418,7 @@ tit_login() {
 				if [ -z "$1" ]; then
 					error "Invalid path: ''"
 				fi
-				TERMUX_PROOT_ARGS+=("-b" "$1")
+				BINDS+=("$1")
 				;;
 			-w|--workdir)
 				if [ "$#" = 1 ]; then
@@ -403,7 +428,7 @@ tit_login() {
 				if [ -z "$1" ]; then
 					error "Invalid path: ''"
 				fi
-				TERMUX_PROOT_ARGS+=("-w" "$1")
+				WORKDIR="$1"
 				;;
 			--)
 				shift
@@ -421,22 +446,16 @@ tit_login() {
 	if ! tit_check_installed; then
 		error "System not installed"
 	fi
-	local CMDLINE=(proot --kill-on-exit -r "$TERMUX_ROOTFS_PATH" -w "${TERMUX_FILES_PATH}/home" "${TERMUX_PROOT_ARGS[@]}")
 
-	BINDS=(/dev /proc /sys /sdcard "${PREFIX:-/usr}/..:/host-rootfs")
-	if [ "$UNAME" = "Android" ]; then
-		BINDS+=(/system /vendor /apex /data/dalvik-cache /linkerconfig/ld.config.txt)
+	local CMDLINE=()
+	if proot --help | grep -q -- "--kill-on-exit"; then
+		CMDLINE+=("--kill-on-exit")
 	fi
-	for BIND in "${BINDS[@]}"; do
-		if [ -e "${BIND%:*}" ]; then
-			CMDLINE+=(-b "$BIND")
-		fi
-	done
 
-	CMDLINE+=(-b "${TERMUX_ROOTFS_PATH}:${TERMUX_FILES_PATH}/usr"
-		-b "${TERMUX_ROOTFS_PATH}/home:${TERMUX_FILES_PATH}/home"
-		-b "${TERMUX_ROOTFS_PATH}/var/cache:${TERMUX_APP_PATH}/cache"
-	)
+	CMDLINE+=(-r "$TERMUX_ROOTFS_PATH" -w "$WORKDIR")
+	for BIND in "${BINDS[@]}"; do
+		CMDLINE+=(-b "$BIND")
+	done
 
 	CMDLINE+=("${TERMUX_FILES_PATH}/usr/bin/env" -i
 		"HOME=${TERMUX_FILES_PATH}/home"
@@ -468,7 +487,7 @@ tit_login() {
 	fi
 
 	unset LD_PRELOAD
-	exec "${CMDLINE[@]}"
+	exec proot "${CMDLINE[@]}"
 }
 
 tit_remove() {
@@ -495,6 +514,7 @@ tit_remove() {
 	if ! tit_check_installed -n; then
 		error "System not installed"
 	fi
+
 	local KEY
 	if [ "$ASK" = true ]; then
 		info "Remove system ($(basename "$TERMUX_ROOTFS_PATH"))? [Y/n]"
@@ -513,6 +533,7 @@ tit_remove() {
 
 tit_list() {
 	local ONLY_INSTALLED=false
+	local SHOW_SIZE=false
 	while [ "$#" != 0 ]; do
 		case "$1" in
 			-i|--installed)
@@ -530,7 +551,7 @@ tit_list() {
 	done
 
 	for TERMUX_ROOTFS_PATH in "$HOME"/termux{,-pacman}-fs{,32}; do
-		if [ "$IS64" != true ] && printf "%s\n" "$TERMUX_ROOTFS_PATH" | grep -q "32$"; then
+		if [ "$IS64" != true ] && strcmp "*32" "$TERMUX_ROOTFS_PATH"; then
 			continue
 		fi
 		if tit_check_installed; then
@@ -599,6 +620,7 @@ tit_backup() {
 	ok "Generate metadata"
 	info "Backup sandbox"
 
+	#shellcheck disable=SC2317
 	cleanup() {
 		rm -f "$DEST"
 	}
@@ -607,6 +629,8 @@ tit_backup() {
 			error "Backup sandbox"
 		fi
 	ok "Backup sandbox to '${DEST}'"
+
+	unset cleanup
 }
 
 tit_restore() {
@@ -644,7 +668,7 @@ tit_restore() {
 		error "Archive unreadable"
 	fi
 	# shellcheck source=/dev/null
-	. <(tar -xOf "$ARCHIVE" tit_metadata 2>/dev/null || printf "error \"Broken archive\"\n")
+	. <(tar -xOf "$ARCHIVE" tit_metadata 2>/dev/null | sed "s/^/local " || printf "error \"Broken archive\"\n")
 	if [ "$ARCH" != "$BACKUP_HOST_ARCH" ]; then
 		error "Device architectures mismatch ('${ARCH}' != '${BACKUP_HOST_ARCH}')"
 	elif [ "$UNAME" != "$BACKUP_HOST_UNAME" ]; then
@@ -659,6 +683,7 @@ tit_restore() {
 	mkdir -p "$TERMUX_ROOTFS_PATH"
 	info "Restore system"
 
+	#shellcheck disable=SC2317
 	cleanup() {
 		rm -rf "$TERMUX_ROOTFS_PATH"
 	}
@@ -667,6 +692,8 @@ tit_restore() {
 		error "Restore system"
 	fi
 	ok "Restore system to '$(basename "$TERMUX_ROOTFS_PATH")'"
+
+	unset cleanup
 }
 
 ARGS=("$@")
