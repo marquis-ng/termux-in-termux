@@ -187,7 +187,7 @@ case "$ARCH" in
 esac
 
 tit_check_installed() {
-	if [ "$(find "$TERMUX_ROOTFS_PATH" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l)" = 0 ]; then
+	if [ "$(find "$TERMUX_ROOTFS_PATH" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l)" = 0 ] || [ -f "${TERMUX_ROOTFS_PATH}/SYMLINKS.txt" ]; then
 		return 1
 	elif [ "$UNAME" = "Android" ] || [ "$1" = "-n" ]; then
 		return 0
@@ -296,13 +296,9 @@ tit_install_bootstrap() {
 		fi
 	fi
 
-	#shellcheck disable=SC2317
-	cleanup() {
-		rm -rf "$TERMUX_ROOTFS_PATH"
-	}
-
 	mkdir -p "$TERMUX_ROOTFS_PATH"
 	run "Extract Termux bootstrap" unzip -oq "$TERMUX_BOOTSTRAP_PATH" -d "$TERMUX_ROOTFS_PATH"
+	mkdir -p "${TERMUX_ROOTFS_PATH}/home" "${TERMUX_ROOTFS_PATH}/var/cache"
 
 	info "Create symlinks"
 	while read -r LINK; do
@@ -312,14 +308,10 @@ tit_install_bootstrap() {
 	done < "${TERMUX_ROOTFS_PATH}/SYMLINKS.txt"
 	ok "Create $(wc -l < "${TERMUX_ROOTFS_PATH}/SYMLINKS.txt") symlinks"
 	rm "${TERMUX_ROOTFS_PATH}/SYMLINKS.txt"
-	mkdir -p "${TERMUX_ROOTFS_PATH}/home" "${TERMUX_ROOTFS_PATH}/var/cache"
-
-	unset cleanup
 
 	if [ "$UNAME" == "GNU/Linux" ]; then
 		tit_install_system
 	fi
-
 }
 
 tit_install_system() {
