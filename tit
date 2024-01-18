@@ -380,11 +380,7 @@ tit_install_system() {
 
 tit_login() {
 	local WORKDIR="${TERMUX_FILES_PATH}/home"
-	local BINDS=(/dev /proc /sys "${PREFIX:-/usr}/..:/host-rootfs"
-		"${TERMUX_ROOTFS_PATH}:${TERMUX_FILES_PATH}/usr"
-		"${TERMUX_ROOTFS_PATH}/home:${TERMUX_FILES_PATH}/home"
-		"${TERMUX_ROOTFS_PATH}/var/cache:${TERMUX_APP_PATH}/cache"
-	)
+	local BINDS=()
 	if [ "$UNAME" = "Android" ]; then
 		for BIND in /sdcard /system /vendor /apex /data/dalvik-cache /linkerconfig/ld.config.txt; do
 			if [ -e "$BIND" ]; then
@@ -438,6 +434,13 @@ tit_login() {
 	if ! tit_check_installed; then
 		error "System not installed"
 	fi
+
+	BINDS=(/dev /proc /sys "${PREFIX:-/usr}/..:/host-rootfs"
+		"${TERMUX_ROOTFS_PATH}:${TERMUX_FILES_PATH}/usr"
+		"${TERMUX_ROOTFS_PATH}/home:${TERMUX_FILES_PATH}/home"
+		"${TERMUX_ROOTFS_PATH}/var/cache:${TERMUX_APP_PATH}/cache"
+		"${BINDS[@]}"
+	)
 
 	local CMDLINE=()
 	if proot --help | grep -q -- "--kill-on-exit"; then
