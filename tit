@@ -484,7 +484,8 @@ tit_install_system() {
 			cd "$BIONIC_HOST_PACMAN_DIR"\
 				&& mkdir -p "${TERMUX_ROOTFS_PATH}/var/lib/pacman/local/${BIONIC_HOST_PACMAN_VER}"\
 				&& cp -f ".MTREE" "${TERMUX_ROOTFS_PATH}/var/lib/pacman/local/${BIONIC_HOST_PACMAN_VER}/mtree"\
-				&& { [ -f ".INSTALL" ] && cp -f ".INSTALL" "${TERMUX_ROOTFS_PATH}/var/lib/pacman/local/${BIONIC_HOST_PACMAN_VER}/install" || true; }
+				&& { [ -f ".INSTALL" ] && cp -f ".INSTALL" "${TERMUX_ROOTFS_PATH}/var/lib/pacman/local/${BIONIC_HOST_PACMAN_VER}/install" || true; }\
+				&& { printf "%%FILES%%\n"; find . ! -path "./.*" -printf "%P\n"; } > "${TERMUX_ROOTFS_PATH}/var/lib/pacman/local/${BIONIC_HOST_PACMAN_VER}/files"
 		) || ! tar -xOf "$PACMAN_DBFILE" "$BIONIC_HOST_PACMAN_VER/desc" > "${TERMUX_ROOTFS_PATH}/var/lib/pacman/local/${BIONIC_HOST_PACMAN_VER}/desc"; then
 			error "Register bionic-host"
 		fi
@@ -493,8 +494,8 @@ tit_install_system() {
 		info "Install bionic-host"
 		if ! (
 			cd "$BIONIC_HOST_PACMAN_DIR/data/data/com.termux/files/usr"\
-				&& find . -type d -exec mkdir -p "$TERMUX_ROOTFS_PATH"/{} \;\
-				&& find . -type f -exec mv -f {} "$TERMUX_ROOTFS_PATH"/{} \;
+				&& find . ! -path "./.*" -type d -exec mkdir -p "$TERMUX_ROOTFS_PATH"/{} \;\
+				&& find . ! -path "./.*" -type f -exec mv -f {} "$TERMUX_ROOTFS_PATH"/{} \;
 		); then
 			error "Install bionic-host"
 		fi
