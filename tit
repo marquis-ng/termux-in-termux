@@ -198,7 +198,7 @@ tit_check_installed() {
 		return 2
 	elif [ "$TERMUX_PACMAN" = true ] && find "${TERMUX_ROOTFS_PATH}/var/lib/pacman/local" -type d -regex "\./bionic-host-[^-]+-[^-]+" -print -quit 2>/dev/null | grep -q .; then
 		return 2
-	elif [ ! -f "${TERMUX_ROOTFS_PATH}/system/bin/busybox" ]; then
+	elif [ ! -f "${TERMUX_ROOTFS_PATH}/system/bin/toybox" ]; then
 		return 2
 	else
 		return 0
@@ -236,14 +236,11 @@ tit_set_vars() {
 		BOOTSTRAP_ARCH="$ARCH"
 	fi
 
-	case "$BOOTSTRAP_ARCH" in
-		aarch64|arm)
-			BUSYBOX_ARCH="armv7l"
-			;;
-		x86_64|i686)
-			BUSYBOX_ARCH="i686"
-			;;
-	esac
+	if [ "$BOOTSTRAP_ARCH" = "arm" ]; then
+		TOYBOX_ARCH="armv7l"
+	else
+		TOYBOX_ARCH="$BOOTSTRAP_ARCH"
+	fi
 }
 
 tit_install() {
@@ -322,24 +319,24 @@ tit_install_bootstrap() {
 }
 
 tit_install_system() {
-	local BUSYBOX="${TMPDIR}/busybox-${BUSYBOX_ARCH}"
-	local BUSYBOX_URL="https://busybox.net/downloads/binaries/1.31.0-defconfig-multiarch-musl/busybox-${BUSYBOX_ARCH}"
+	local TOYBOX="${TMPDIR}/toybox-${TOYBOX_ARCH}"
+	local TOYBOX_URL="https://landley.net/toybox/downloads/binaries/latest/toybox-${TOYBOX_ARCH}"
 
-	if [ -f "$BUSYBOX" ]; then
-		info "Use cached BusyBox binary"
+	if [ -f "$TOYBOX" ]; then
+		info "Use cached Toybox binary"
 	else
-		if [ -e "$BUSYBOX" ]; then
-			run "Remove BusyBox binary" rm -rf "$BUSYBOX"
+		if [ -e "$TOYBOX" ]; then
+			run "Remove Toybox binary" rm -rf "$TOYBOX"
 		fi
-		mkdir -p "$(dirname "$BUSYBOX")"
-		run "Download BusyBox binary" wget "$BUSYBOX_URL" -q --show-progress -O "$BUSYBOX"
+		mkdir -p "$(dirname "$TOYBOX")"
+		run "Download Toybox binary" wget "$TOYBOX_URL" -q --show-progress -O "$TOYBOX"
 	fi
 
-	if ! run -n "Verify size of BusyBox binary" [ "$(wget --spider "$BUSYBOX_URL" 2>&1 | awk "\$1 == \"Length:\" {printf(\$2)}")" = "$(wc -c "$BUSYBOX" | awk "{printf(\$1)}")" ] || {
-		[ ! -x "$BUSYBOX" ] && run "Grant execute permission" chmod +x "$BUSYBOX"
-		! run -n "Verify functionality of BusyBox" [ "$("$BUSYBOX" echo "hello world")" = "hello world" ]
+	if ! run -n "Verify size of Toybox binary" [ "$(wget --spider "$TOYBOX_URL" 2>&1 | awk "\$1 == \"Length:\" {printf(\$2)}")" = "$(wc -c "$TOYBOX" | awk "{printf(\$1)}")" ] || {
+		[ ! -x "$TOYBOX" ] && run "Grant execute permission" chmod +x "$TOYBOX"
+		! run -n "Verify functionality of Toybox" [ "$("$TOYBOX" echo "hello world")" = "hello world" ]
 	}; then
-		if run "Remove corrupted BusyBox bianry" rm -f "$BUSYBOX"; then
+		if run "Remove corrupted Toybox bianry" rm -f "$TOYBOX"; then
 			info "Restart script"
 			exec "$(realpath -- "$0")" "${ARGS[@]}"
 		fi
@@ -508,8 +505,12 @@ tit_install_system() {
 	run "Link bionic-host" ln -sf "opt/bionic-host" "$TERMUX_ROOTFS_PATH/system"
 
 	mkdir -p "${TERMUX_ROOTFS_PATH}/system/bin"
-	run "Copy BusyBox to Termux" cp "$BUSYBOX" "${TERMUX_ROOTFS_PATH}/system/bin/busybox"
-	run "Install applets" "${TERMUX_ROOTFS_PATH}/system/bin/busybox" --install -s "${TERMUX_ROOTFS_PATH}/system/bin"
+	run "Copy Toybox to Termux" cp -f "$TOYBOX" "${TERMUX_ROOTFS_PATH}/system/bin/toybox"
+	info "Install Toybox commands"
+	for COMMAND in $("${TERMUX_ROOTFS_PATH}/system/bin/toybox"); do
+		ln -sf toybox "${TERMUX_ROOTFS_PATH}/system/bin/${COMMAND}" || error "Install Toybox commands"
+	done
+	ok "Install Toybox commands"
 }
 
 tit_login() {
