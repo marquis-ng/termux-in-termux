@@ -4,7 +4,8 @@ TERMUX_ROOTFS_PATH="$(realpath -- "${HOME}/termux-fs")"
 TERMUX_BOOTSTRAP_PATH="$(realpath -- "${TMPDIR}/termux-fs.zip")"
 TERMUX_APP_PATH="/data/data/com.termux"
 TERMUX_FILES_PATH="${TERMUX_APP_PATH}/files"
-TERMUX_MIRROR="https://packages.termux.dev/apt/termux-main"
+TERMUX_MIRROR_APT="https://packages.termux.dev/apt/termux-main"
+TERMUX_MIRROR_PACMAN="https://service.termux-pacman.dev/main"
 TERMUX_32_BIT=false
 TERMUX_PACMAN=false
 
@@ -147,7 +148,7 @@ usage() {
 	exit "$EXITCODE"
 }
 
-DEPS=(wget unzip tar proot)
+DEPS=(wget unzip tar ar proot)
 UNAME="$(uname -o)"
 if [ "$UNAME"  != "Android" ] && [ "$UNAME" != "GNU/Linux" ]; then
 	error "Unsupported platform: '${UNAME}'"
@@ -187,11 +188,17 @@ case "$ARCH" in
 esac
 
 tit_check_installed() {
-	if [ "$(find "$TERMUX_ROOTFS_PATH" -mindepth 1 -maxdepth 1 2>/dev/null | wc -l)" = 0 ] || [ -f "${TERMUX_ROOTFS_PATH}/SYMLINKS.txt" ]; then
+	if [ ! -d "$TERMUX_ROOTFS_PATH" ] || [ -z "$(ls -A "$TERMUX_ROOTFS_PATH")" ] || [ -f "${TERMUX_ROOTFS_PATH}/SYMLINKS.txt" ]; then
 		return 1
 	elif [ "$UNAME" = "Android" ] || [ "$1" = "-n" ]; then
 		return 0
-	elif [ ! -f "${TERMUX_ROOTFS_PATH}/var/lib/dpkg/status" ] || ! grep -q "Package: bionic-host" "${TERMUX_ROOTFS_PATH}/var/lib/dpkg/status" || [ ! -f "${TERMUX_ROOTFS_PATH}/system/bin/busybox" ]; then
+	elif [ "$TERMUX_PACMAN" = false ] && {
+ 		[ ! -f "${TERMUX_ROOTFS_PATH}/var/lib/dpkg/status" ] || ! grep -q "Package: bionic-host" "${TERMUX_ROOTFS_PATH}/var/lib/dpkg/status"
+	}; then
+		return 2
+	elif [ "$TERMUX_PACMAN" = true ] && find "${TERMUX_ROOTFS_PATH}/var/lib/pacman/local" -type d -regex "\./bionic-host-[^-]+-[^-]+" -print -quit 2>/dev/null | grep -q .; then
+		return 2
+	elif [ ! -f "${TERMUX_ROOTFS_PATH}/system/bin/busybox" ]; then
 		return 2
 	else
 		return 0
@@ -338,20 +345,64 @@ tit_install_system() {
 		fi
 	fi
 
-	local BIONIC_HOST="${TMPDIR}/bionic-host-${BOOTSTRAP_ARCH}.deb"
-	info "Get information about bionic-host"
-	#shellcheck disable=SC1090
-	. <(wget -qO- "${TERMUX_MIRROR}/dists/stable/main/binary-${BOOTSTRAP_ARCH}/Packages" | awk "
-		\$0 == \"Package: bionic-host\" {f=1}
-		f {
-			if (\$1 == \"Filename:\") filename=\$2
-			else if (\$1 == \"SHA256:\") sha256=\$2
-			if (filename && sha256) {
-				printf(\"local BIONIC_HOST_FILENAME=%s local BIONIC_HOST_SHA256=%s\", filename, sha256)
-				exit
+	local BIONIC_HOST BIONIC_HOST_URL BIONIC_HOST_SHA256
+	if [ "$TERMUX_PACMAN" = false ]; then
+		local APT_PKGSFILE="${TMPDIR}/termux-apt-binary-${BOOTSTRAP_ARCH}-Packages"
+		if ! wget "${TERMUX_MIRROR_APT}/dists/stable/main/binary-${BOOTSTRAP_ARCH}/Packages" -q -O "$APT_PKGSFILE"; then
+			error "Download Termux APT database"
+		fi
+
+		BIONIC_HOST="${TMPDIR}/bionic-host-${BOOTSTRAP_ARCH}.deb"
+		#shellcheck disable=SC1090
+		. <(awk "
+			\$0 == \"Package: bionic-host\" {f=1}
+			f {
+				if (\$1 == \"Filename:\") filename=\$2
+				else if (\$1 == \"SHA256:\") sha256=\$2
+				if (filename && sha256) {
+					printf(\"BIONIC_HOST_URL=%s/%s BIONIC_HOST_SHA256=%s\", \"$TERMUX_MIRROR_APT\", filename, sha256)
+					exit
+				}
 			}
-		}
-	")
+		" "$APT_PKGSFILE")
+	else
+		local PACMAN_DBFILE="${TMPDIR}/termux-pacman-main-${BOOTSTRAP_ARCH}.db"
+		if ! wget "${TERMUX_MIRROR_PACMAN}/${BOOTSTRAP_ARCH}/main.db" -q -O "$PACMAN_DBFILE"; then
+			error "Download Termux Pacman database"
+		fi
+
+		local BIONIC_HOST_PACMAN_VER
+		if ! BIONIC_HOST_PACMAN_VER="$(tar -tf "$PACMAN_DBFILE" | grep -m1 -E "^bionic-host-[^-]+-[^-]+/\$")"; then
+			error "Get version of bionic-host"
+		fi
+		BIONIC_HOST_PACMAN_VER="${BIONIC_HOST_PACMAN_VER%/}"
+
+		BIONIC_HOST="${TMPDIR}/bionic-host-${BOOTSTRAP_ARCH}$(printf "%s" "$BIONIC_HOST_URL" | grep -o "\.pkg\.tar\.[^\.]\+\$")"
+		#shellcheck disable=SC1090
+		. <(tar -xOf "$PACMAN_DBFILE" "$BIONIC_HOST_PACMAN_VER/desc" | awk "
+			{
+				if (filename_flag) {
+					filename=\$0
+					filename_flag=0
+				} else if (sha256_flag) {
+					sha256=\$0
+					sha256_flag=0
+				} else {
+					if (\$0 == \"%FILENAME%\") filename_flag=1
+					else if (\$0 == \"%SHA256SUM%\") sha256_flag=1
+				}
+
+				if (filename && sha256) {
+					printf(\"BIONIC_HOST_URL=%s/%s/%s BIONIC_HOST_SHA256=%s\", \"$TERMUX_MIRROR_PACMAN\", \"$BOOTSTRAP_ARCH\", filename, sha256)
+					exit
+				}
+			}
+		")
+	fi
+
+	if [ -z "$BIONIC_HOST_URL" ] || [ -z "$BIONIC_HOST_SHA256" ]; then
+		error "Get download information about bionic-host"
+	fi
 
 	if [ -f "$BIONIC_HOST" ]; then
 		info "Use cached bionic-host"
@@ -360,7 +411,7 @@ tit_install_system() {
 			run "Remove bionic-host" rm -rf "$BIONIC_HOST"
 		fi
 		mkdir -p "$(dirname "$BIONIC_HOST")"
-		run "Download bionic-host" wget "${TERMUX_MIRROR}/${BIONIC_HOST_FILENAME}" -q --show-progress -O "$BIONIC_HOST"
+		run "Download bionic-host" wget "$BIONIC_HOST_URL" -q --show-progress -O "$BIONIC_HOST"
 	fi
 
 	if ! run -n "Verify SHA256 of bionic-host" [ "$BIONIC_HOST_SHA256" =  "$(sha256sum "$BIONIC_HOST" | awk "{printf(\$1)}")" ]; then
@@ -370,7 +421,90 @@ tit_install_system() {
 		fi
 	fi
 
-	run -m "Install bionic-host" proot -r "$TERMUX_ROOTFS_PATH" -w / -b "$TMPDIR" -b "${TERMUX_ROOTFS_PATH}:${TERMUX_FILES_PATH}/usr" "$BUSYBOX" dpkg -i "$BIONIC_HOST"
+	if [ "$TERMUX_PACMAN" = false ]; then
+		local BIONIC_HOST_APT_DATA_TAR
+		if ! BIONIC_HOST_APT_DATA_TAR="$(ar -t "$BIONIC_HOST" | grep -m1 -E "^data\.tar\.[gx]z$")"; then
+			error "Find data.tar.xz or similar"
+		fi
+		local BIONIC_HOST_APT_CONTROL_TAR
+		if ! BIONIC_HOST_APT_CONTROL_TAR="$(ar -t "$BIONIC_HOST" | grep -m1 -E "^control\.tar\.[gx]z$")"; then
+			error "Find control.tar.xz or similar"
+		fi
+
+		local BIONIC_HOST_APT_DATA_DIR="${TMPDIR}/bionic-host-${BOOTSTRAP_ARCH}-apt-data"
+		if [ -e "$BIONIC_HOST_APT_DATA_DIR" ]; then
+			run "Remove unpacked bionic-host/data" rm -rf "$BIONIC_HOST_APT_DATA_DIR"
+		fi
+		mkdir -p "$BIONIC_HOST_APT_DATA_DIR"
+		ar -p "$BIONIC_HOST" "$BIONIC_HOST_APT_DATA_TAR" | run "Unpack bionic-host/data" tar -xJ -C "$BIONIC_HOST_APT_DATA_DIR"
+
+		local BIONIC_HOST_APT_CONTROL_DIR="${TMPDIR}/bionic-host-${BOOTSTRAP_ARCH}-apt-control"
+		if [ -e "$BIONIC_HOST_APT_CONTROL_DIR" ]; then
+			run "Remove unpacked bionic-host/control" rm -rf "$BIONIC_HOST_APT_CONTROL_DIR"
+		fi
+		mkdir -p "$BIONIC_HOST_APT_CONTROL_DIR"
+		ar -p "$BIONIC_HOST" "$BIONIC_HOST_APT_CONTROL_TAR" | run "Unpack bionic-host/control" tar -xJ -C "$BIONIC_HOST_APT_CONTROL_DIR"
+
+		info "Register bionic-host"
+		if ! (
+			cd "$BIONIC_HOST_APT_DATA_DIR"\
+				&& find ./ | sed -E -e 's,^\./,/,' -e "s,^/\$,/.," > "${TERMUX_ROOTFS_PATH}/var/lib/dpkg/info/bionic-host.list"\
+				&& find . -type f -printf "%P\0" | xargs -0 md5sum > "${TERMUX_ROOTFS_PATH}/var/lib/dpkg/info/bionic-host.md5sums"
+		) || ! (
+			cd "$BIONIC_HOST_APT_CONTROL_DIR"\
+				&& { cat "control"; printf "Status: install ok installed\n\n"; } >> "${TERMUX_ROOTFS_PATH}/var/lib/dpkg/status"\
+				&& for CONTROL_FILE in conffiles postinst postrm preinst prerm; do
+					if [ -f "$CONTROL_FILE" ]; then
+						cp -f "$CONTROL_FILE" "${TERMUX_ROOTFS_PATH}/var/lib/dpkg/info/bionic-host.${CONTROL_FILE}" || return 1
+					fi
+				done
+		); then
+			error "Register bionic-host"
+		fi
+		ok "Register bionic-host"
+
+		info "Install bionic-host"
+		if ! (
+			cd "${BIONIC_HOST_APT_DATA_DIR}/data/data/com.termux/files/usr"\
+				&& find . -type d -exec mkdir -p "$TERMUX_ROOTFS_PATH"/{} \;\
+				&& find . -type f -exec mv -f {} "$TERMUX_ROOTFS_PATH"/{} \;
+		); then
+			error "Install bionic-host"
+		fi
+		ok "Install bionic-host"
+
+		rm -rf "$BIONIC_HOST_APT_DATA_DIR" "$BIONIC_HOST_APT_CONTROL_DIR"
+	else
+		local BIONIC_HOST_PACMAN_DIR="${TMPDIR}/bionic-host-${BOOTSTRAP_ARCH}-pacman"
+		if [ -e "$BIONIC_HOST_PACMAN_DIR" ]; then
+			run "Remove unpacked bionic-host" rm -rf "$BIONIC_HOST_PACMAN_DIR"
+		fi
+		mkdir -p "$BIONIC_HOST_PACMAN_DIR"
+		run "Unpack bionic-host" tar -xf "$BIONIC_HOST" -C "$BIONIC_HOST_PACMAN_DIR"
+
+		info "Register bionic-host"
+		if ! (
+			cd "$BIONIC_HOST_PACMAN_DIR"\
+				&& mkdir -p "${TERMUX_ROOTFS_PATH}/var/lib/pacman/local/${BIONIC_HOST_PACMAN_VER}"\
+				&& cp -f ".MTREE" "${TERMUX_ROOTFS_PATH}/var/lib/pacman/local/${BIONIC_HOST_PACMAN_VER}/mtree"\
+				&& { [ -f ".INSTALL" ] && cp -f ".INSTALL" "${TERMUX_ROOTFS_PATH}/var/lib/pacman/local/${BIONIC_HOST_PACMAN_VER}/install" || true; }
+		) || ! tar -xOf "$PACMAN_DBFILE" "$BIONIC_HOST_PACMAN_VER/desc" > "${TERMUX_ROOTFS_PATH}/var/lib/pacman/local/${BIONIC_HOST_PACMAN_VER}/desc"; then
+			error "Register bionic-host"
+		fi
+		ok "Register bionic-host"
+
+		info "Install bionic-host"
+		if ! (
+			cd "$BIONIC_HOST_PACMAN_DIR/data/data/com.termux/files/usr"\
+				&& find . -type d -exec mkdir -p "$TERMUX_ROOTFS_PATH"/{} \;\
+				&& find . -type f -exec mv -f {} "$TERMUX_ROOTFS_PATH"/{} \;
+		); then
+			error "Install bionic-host"
+		fi
+		ok "Install bionic-host"
+
+		rm -rf "$BIONIC_HOST_PACMAN_DIR"
+	fi
 	run "Link bionic-host" ln -sf "opt/bionic-host" "$TERMUX_ROOTFS_PATH/system"
 
 	mkdir -p "${TERMUX_ROOTFS_PATH}/system/bin"
