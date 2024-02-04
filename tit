@@ -126,24 +126,25 @@ usage() {
 		error -n "$@" 1>&2
 		printf "\n" 1>&2
 	fi
-	printf "%b${DEFAULT}\n" "${BOLD}${YELLOW}Termux-in-Termux (by marquis-ng)"\
-		"${DIM}An isolated environment of Termux inside Termux."\
-		"${DIM}GitHub: https://github.com/marquis-ng/termux-in-termux\n"\
-		"${BOLD}${YELLOW}Usage:"\
-		"  ${GREEN}${PROGNAME} ${MAGENTA}COMMAND ${CYAN}{ARGS[]}"\
-		"  ${GREEN}${PROGNAME} ${MAGENTA}[-h,--help,help]\n"\
-		"${BOLD}${YELLOW}Commands:"\
-		"  ${MAGENTA}install ${CYAN}[--32-bit | -p,--pacman | --reset]"\
-		"      ${BLUE}Install the sandbox."\
-		"  ${MAGENTA}login ${CYAN}[--32-bit | -p,--pacman | -b,--bind {DIR | FILE} |\n          -w,--workdir {DIR}] [-- {CMD[]}]"\
-		"      ${BLUE}Login the sandbox."\
-		"  ${MAGENTA}remove ${CYAN}[--32-bit | -p,--pacman | -y,--yes]"\
-		"      ${BLUE}Remove the sandbox."\
-		"  ${MAGENTA}list ${CYAN}[-i,--installed | -s,--size]"\
-		"      ${BLUE}Show disk usage for each sandbox."\
-		"  ${MAGENTA}backup ${CYAN}[--32-bit | -p,--pacman | -f,--force] -o,--output {FILE}"\
-		"      ${BLUE}Backup the sandbox."\
-		"  ${MAGENTA}restore ${CYAN}[-y,--yes] -a,--archive {FILE}"\
+	printf "%b${DEFAULT}\n" "${BOLD}${YELLOW}Termux-in-Termux (by marquis-ng)" \
+		"${DIM}An isolated environment of Termux inside Termux." \
+		"${DIM}GitHub: https://github.com/marquis-ng/termux-in-termux\n" \
+		"${BOLD}${YELLOW}Usage:" \
+		"  ${GREEN}${PROGNAME} ${MAGENTA}COMMAND ${CYAN}{ARGS[]}" \
+		"  ${GREEN}${PROGNAME} ${MAGENTA}[-h,--help,help]\n" \
+		"${BOLD}${YELLOW}Commands:" \
+		"  ${MAGENTA}install ${CYAN}[--32-bit | -p,--pacman | --reset]" \
+		"      ${BLUE}Install the sandbox." \
+		"  ${MAGENTA}login ${CYAN}[--32-bit | -p,--pacman | -b,--bind {DIR | FILE} |" \
+		"          -w,--workdir {DIR}] [-- {CMD[]}]" \
+		"      ${BLUE}Login the sandbox." \
+		"  ${MAGENTA}remove ${CYAN}[--32-bit | -p,--pacman | -y,--yes]" \
+		"      ${BLUE}Remove the sandbox." \
+		"  ${MAGENTA}list ${CYAN}[-i,--installed | -s,--size]" \
+		"      ${BLUE}Show disk usage for each sandbox." \
+		"  ${MAGENTA}backup ${CYAN}[--32-bit | -p,--pacman | -f,--force] -o,--output {FILE}" \
+		"      ${BLUE}Backup the sandbox." \
+		"  ${MAGENTA}restore ${CYAN}[-y,--yes] -a,--archive {FILE}" \
 		"      ${BLUE}Restore a backup made by the program." 1>&2
 	exit "$EXITCODE"
 }
@@ -222,9 +223,6 @@ tit_set_vars() {
 	fi
 
 	if [ "$TERMUX_32_BIT" = true ]; then
-		if [ "$IS64" != true ] || [ "$UNAME" = "GNU/Linux" ]; then
-			error "Unsupported option: '--32-bit'"
-		fi
 		TERMUX_ROOTFS_PATH+="32"
 		TERMUX_BOOTSTRAP_PATH="${TERMUX_BOOTSTRAP_PATH%.zip}32.zip"
 		if [ "$ARCH" = "aarch64" ]; then
@@ -444,12 +442,12 @@ tit_install_system() {
 
 		info "Register bionic-host"
 		if ! (
-			cd "$BIONIC_HOST_APT_DATA_DIR"\
-				&& find ./ | sed -E -e 's,^\./,/,' -e "s,^/\$,/.," > "${TERMUX_ROOTFS_PATH}/var/lib/dpkg/info/bionic-host.list"\
+			cd "$BIONIC_HOST_APT_DATA_DIR" \
+				&& find ./ | sed -E -e 's,^\./,/,' -e "s,^/\$,/.," > "${TERMUX_ROOTFS_PATH}/var/lib/dpkg/info/bionic-host.list" \
 				&& find . -type f -printf "%P\0" | xargs -0 md5sum > "${TERMUX_ROOTFS_PATH}/var/lib/dpkg/info/bionic-host.md5sums"
 		) || ! (
-			cd "$BIONIC_HOST_APT_CONTROL_DIR"\
-				&& { cat "control"; printf "Status: install ok installed\n\n"; } >> "${TERMUX_ROOTFS_PATH}/var/lib/dpkg/status"\
+			cd "$BIONIC_HOST_APT_CONTROL_DIR" \
+				&& { cat "control"; printf "Status: install ok installed\n\n"; } >> "${TERMUX_ROOTFS_PATH}/var/lib/dpkg/status" \
 				&& for CONTROL_FILE in conffiles postinst postrm preinst prerm; do
 					if [ -f "$CONTROL_FILE" ]; then
 						cp -f "$CONTROL_FILE" "${TERMUX_ROOTFS_PATH}/var/lib/dpkg/info/bionic-host.${CONTROL_FILE}" || return 1
@@ -462,8 +460,8 @@ tit_install_system() {
 
 		info "Install bionic-host"
 		if ! (
-			cd "${BIONIC_HOST_APT_DATA_DIR}/data/data/com.termux/files/usr"\
-				&& find . -type d -exec mkdir -p "$TERMUX_ROOTFS_PATH"/{} \;\
+			cd "${BIONIC_HOST_APT_DATA_DIR}/data/data/com.termux/files/usr" \
+				&& find . -type d -exec mkdir -p "$TERMUX_ROOTFS_PATH"/{} \; \
 				&& find . -type f -exec mv -f {} "$TERMUX_ROOTFS_PATH"/{} \;
 		); then
 			error "Install bionic-host"
@@ -481,10 +479,10 @@ tit_install_system() {
 
 		info "Register bionic-host"
 		if ! (
-			cd "$BIONIC_HOST_PACMAN_DIR"\
-				&& mkdir -p "${TERMUX_ROOTFS_PATH}/var/lib/pacman/local/${BIONIC_HOST_PACMAN_VER}"\
-				&& cp -f ".MTREE" "${TERMUX_ROOTFS_PATH}/var/lib/pacman/local/${BIONIC_HOST_PACMAN_VER}/mtree"\
-				&& { [ -f ".INSTALL" ] && cp -f ".INSTALL" "${TERMUX_ROOTFS_PATH}/var/lib/pacman/local/${BIONIC_HOST_PACMAN_VER}/install" || true; }\
+			cd "$BIONIC_HOST_PACMAN_DIR" \
+				&& mkdir -p "${TERMUX_ROOTFS_PATH}/var/lib/pacman/local/${BIONIC_HOST_PACMAN_VER}" \
+				&& cp -f ".MTREE" "${TERMUX_ROOTFS_PATH}/var/lib/pacman/local/${BIONIC_HOST_PACMAN_VER}/mtree" \
+				&& { [ -f ".INSTALL" ] && cp -f ".INSTALL" "${TERMUX_ROOTFS_PATH}/var/lib/pacman/local/${BIONIC_HOST_PACMAN_VER}/install" || true; } \
 				&& { printf "%%FILES%%\n"; find . ! -path "./.*" -printf "%P\n"; } > "${TERMUX_ROOTFS_PATH}/var/lib/pacman/local/${BIONIC_HOST_PACMAN_VER}/files"
 		) || ! tar -xOf "$PACMAN_DBFILE" "$BIONIC_HOST_PACMAN_VER/desc" > "${TERMUX_ROOTFS_PATH}/var/lib/pacman/local/${BIONIC_HOST_PACMAN_VER}/desc"; then
 			error "Register bionic-host"
@@ -493,8 +491,8 @@ tit_install_system() {
 
 		info "Install bionic-host"
 		if ! (
-			cd "$BIONIC_HOST_PACMAN_DIR/data/data/com.termux/files/usr"\
-				&& find . ! -path "./.*" -type d -exec mkdir -p "$TERMUX_ROOTFS_PATH"/{} \;\
+			cd "$BIONIC_HOST_PACMAN_DIR/data/data/com.termux/files/usr" \
+				&& find . ! -path "./.*" -type d -exec mkdir -p "$TERMUX_ROOTFS_PATH"/{} \; \
 				&& find . ! -path "./.*" -type f -exec mv -f {} "$TERMUX_ROOTFS_PATH"/{} \;
 		); then
 			error "Install bionic-host"
@@ -744,9 +742,9 @@ tit_backup() {
 
 	info "Generate metadata"
 	local METADATA="${TMPDIR}/tit_metadata"
-	printf "%s=\"%s\"\n" "TERMUX_32_BIT" "$TERMUX_32_BIT"\
-		"TERMUX_PACMAN" "$TERMUX_PACMAN"\
-		"BACKUP_HOST_ARCH" "$ARCH"\
+	printf "%s=\"%s\"\n" "TERMUX_32_BIT" "$TERMUX_32_BIT" \
+		"TERMUX_PACMAN" "$TERMUX_PACMAN" \
+		"BACKUP_HOST_ARCH" "$ARCH" \
 		"BACKUP_HOST_UNAME" "$UNAME" > "$METADATA"
 	ok "Generate metadata"
 	info "Backup sandbox"
