@@ -133,7 +133,7 @@ usage() {
 		"  ${GREEN}${PROGNAME} ${MAGENTA}COMMAND ${CYAN}{ARGS[]}" \
 		"  ${GREEN}${PROGNAME} ${MAGENTA}[-h,--help,help]\n" \
 		"${BOLD}${YELLOW}Commands:" \
-		"  ${MAGENTA}install ${CYAN}[--32-bit | -p,--pacman | --reset]" \
+		"  ${MAGENTA}install ${CYAN}[--32-bit | -p,--pacman | --reset | --retries {N}]" \
 		"      ${BLUE}Install the sandbox." \
 		"  ${MAGENTA}login ${CYAN}[--32-bit | -p,--pacman | -b,--bind {DIR | FILE} |" \
 		"          -w,--workdir {DIR}] [-- {CMD[]}]" \
@@ -243,6 +243,7 @@ tit_set_vars() {
 
 tit_install() {
 	local RESET=false
+	local RETRIES=5
 	while [ "$#" != 0 ]; do
 		case "$1" in
 			--32-bit)
@@ -254,6 +255,17 @@ tit_install() {
 			--reset)
 				RESET=true
 				;;
+			--retries)
+				if [ "$#" = 1 ]; then
+					usage "Missing parameter: '--retries'"
+				fi
+				shift
+				if [ -z "$1" ] || strcmp "$1" "*[!0-9]*"; then
+					error "Invalid integer: '--retries'"
+				fi
+				RETRIES="$1"
+				;;
+
 			*)
 				usage "Unrecognized option: '$1'"
 				;;
@@ -280,6 +292,15 @@ tit_install() {
 	esac
 }
 
+tit_install_retry() {
+	if [ "$RETRIES" -le 0 ]; then
+		error "No more retries"
+	fi
+
+	info "Restart script"
+	exec "$(realpath -- "$0")" "${ARGS[@]}" --retries "$((RETRIES - 1))"
+}
+
 tit_install_bootstrap() {
 	if [ -f "$TERMUX_BOOTSTRAP_PATH" ]; then
 		info "Use cached Termux bootstrap"
@@ -293,8 +314,7 @@ tit_install_bootstrap() {
 
 	if ! run -n "Verify SHA256 of bootstrap" [ "$(wget -qO- "https://github.com/${SOURCE}/releases/latest/download/CHECKSUMS-sha256.txt" | awk "\$1 == \"bootstrap-${BOOTSTRAP_ARCH}.zip\" {printf(\$2)}")" =  "$(sha256sum "$TERMUX_BOOTSTRAP_PATH" | awk "{printf(\$1)}")" ]; then
 		if run "Remove corrupted/expired bootstrap" rm -f "$TERMUX_BOOTSTRAP_PATH"; then
-			info "Restart script"
-			exec "$(realpath -- "$0")" "${ARGS[@]}"
+			tit_install_retry
 		fi
 	fi
 
@@ -335,8 +355,7 @@ tit_install_system() {
 		! run -n "Verify functionality of Toybox" [ "$("$TOYBOX" echo "hello world")" = "hello world" ]
 	}; then
 		if run "Remove corrupted Toybox bianry" rm -f "$TOYBOX"; then
-			info "Restart script"
-			exec "$(realpath -- "$0")" "${ARGS[@]}"
+			tit_install_retry
 		fi
 	fi
 
@@ -411,8 +430,7 @@ tit_install_system() {
 
 	if ! run -n "Verify SHA256 of bionic-host" [ "$BIONIC_HOST_SHA256" =  "$(sha256sum "$BIONIC_HOST" | awk "{printf(\$1)}")" ]; then
 		if run "Remove corrupted/expired bionic-host" rm -f "$BIONIC_HOST"; then
-			info "Restart script"
-			exec "$(realpath -- "$0")" "${ARGS[@]}"
+			tit_install_retry
 		fi
 	fi
 
